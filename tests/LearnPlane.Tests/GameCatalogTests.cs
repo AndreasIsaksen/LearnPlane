@@ -7,8 +7,8 @@ namespace LearnPlane.Tests;
 public sealed class GameCatalogTests
 {
     [Theory]
-    [InlineData(2, CourseDifficulty.Lett, "Ordskogen", 8)]
-    [InlineData(6, CourseDifficulty.Middels, "Begrepsjakten", 14)]
+    [InlineData(2, CourseDifficulty.Lett, "Kortskogen", 8)]
+    [InlineData(6, CourseDifficulty.Middels, "Kortjakten", 14)]
     [InlineData(9, CourseDifficulty.Utfordrende, "Fagduellen", 20)]
     public void CreatesThreeProgressiveAgeAdjustedLevels(int grade, CourseDifficulty difficulty, string firstTitle, int finalPoints)
     {
@@ -27,12 +27,16 @@ public sealed class GameCatalogTests
         Assert.Equal(3, levels.Length);
         Assert.Equal(firstTitle, levels[0].Title);
         Assert.Equal(finalPoints, levels[2].MaxPoints);
-        Assert.Equal([6, 10, 14], levels.Select(x => x.Cards.Count));
-        Assert.All(levels, level => Assert.Equal(level.Cards.Count / 2, level.Cards.Count(x => x.IsTarget)));
+        Assert.Equal([GameLevelMode.CardSort, GameLevelMode.Matching, GameLevelMode.Jigsaw], levels.Select(x => x.Mode));
+        Assert.Equal([6, 10, 5], levels.Select(x => x.Cards.Count));
+        Assert.Equal(3, levels[0].Cards.Count(x => x.IsTarget));
+        Assert.Equal(5, levels[1].Cards.Count(x => x.IsTarget));
+        Assert.Equal(5, levels[2].Cards.Count(x => x.CorrectPosition is not null));
         Assert.All(levels, level => Assert.InRange(level.MaxPoints, 1, 20));
         Assert.StartsWith("Fagoppdrag:", game.Title);
-        Assert.Contains("samme fag", game.Intro);
+        Assert.Contains("Tre ulike oppdrag", game.Intro);
         Assert.Contains(levels[0].Cards, x => x.IsTarget && x.Text == "art");
-        Assert.Contains(levels[1].Cards, x => !x.IsTarget && x.Text is "problemstilling" or "partikkel" or "vær" or "celle");
+        Assert.All(levels[1].Cards, x => Assert.NotNull(x.PairKey));
+        Assert.Equal(Enumerable.Range(1, 5), levels[2].Cards.Select(x => x.CorrectPosition!.Value));
     }
 }

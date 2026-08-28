@@ -48,14 +48,81 @@ public sealed class LearningChallengeServiceTests
         var firstLevel = Assert.Single(view!.Levels, x => x.Number == 1);
         var targetIds = await fixture.GetGameTargetIdsAsync(firstLevel.Id);
 
-        var first = await game.SubmitAsync(firstLevel.Id, ChallengeFixture.UserId, targetIds.Take(3).Append(firstLevel.Cards.First(x => !targetIds.Contains(x.Id)).Id).ToArray());
-        var perfect = await game.SubmitAsync(firstLevel.Id, ChallengeFixture.UserId, targetIds);
+        var first = await game.SubmitAsync(firstLevel.Id, ChallengeFixture.UserId,
+            targetIds.Take(3).Append(firstLevel.Cards.First(x => !targetIds.Contains(x.Id)).Id)
+                .Select(id => new GameMove(id)).ToArray());
+        var perfect = await game.SubmitAsync(firstLevel.Id, ChallengeFixture.UserId,
+            targetIds.Select(id => new GameMove(id)).ToArray());
         var after = await game.GetAsync(fixture.CourseId, ChallengeFixture.UserId);
 
         Assert.True(first.Passed);
         Assert.Equal(6, first.NewlyAwardedPoints);
         Assert.Equal(2, perfect.NewlyAwardedPoints);
         Assert.True(after!.Levels.Single(x => x.Number == 2).Unlocked);
+    }
+
+    [Fact]
+    public async Task QuizRejectsFourthAttemptAfterThreeRecentFailures()
+    {
+        await using var fixture = await ChallengeFixture.CreateAsync(userAge: 6, courseGrade: 1);
+        var quiz = fixture.CreateQuizService();
+        var wrongAnswers = await fixture.GetQuizAnswersAsync(0);
+
+        QuizSubmission? third = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+            third = await quiz.SubmitAsync(fixture.CourseId, ChallengeFixture.UserId, wrongAnswers);
+
+        Assert.True(third!.Lockout.IsLocked);
+        await Assert.ThrowsAsync<ChallengeLockedException>(() =>
+            quiz.SubmitAsync(fixture.CourseId, ChallengeFixture.UserId, wrongAnswers));
+    }
+
+    [Fact]
+    public async Task GameRejectsFourthAttemptAfterThreeRecentFailures()
+    {
+        await using var fixture = await ChallengeFixture.CreateAsync(userAge: 6, courseGrade: 1);
+        var game = fixture.CreateGameService();
+        var level = Assert.Single((await game.GetAsync(fixture.CourseId, ChallengeFixture.UserId))!.Levels, x => x.Number == 1);
+        var targetIds = await fixture.GetGameTargetIdsAsync(level.Id);
+        var wrongMoves = level.Cards.Where(x => !targetIds.Contains(x.Id)).Select(x => new GameMove(x.Id)).ToArray();
+
+        GameSubmission? third = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+            third = await game.SubmitAsync(level.Id, ChallengeFixture.UserId, wrongMoves);
+
+        Assert.True(third!.Lockout.IsLocked);
+        await Assert.ThrowsAsync<ChallengeLockedException>(() =>
+            game.SubmitAsync(level.Id, ChallengeFixture.UserId, wrongMoves));
+    }
+
+    [Fact]
+    public async Task MatchingAndJigsawLevelsAreScoredByTheirOwnRules()
+    {
+        await using var fixture = await ChallengeFixture.CreateAsync(userAge: 6, courseGrade: 1);
+        var game = fixture.CreateGameService();
+        var initial = await game.GetAsync(fixture.CourseId, ChallengeFixture.UserId);
+        var first = initial!.Levels.Single(x => x.Number == 1);
+        var targets = await fixture.GetGameTargetIdsAsync(first.Id);
+        await game.SubmitAsync(first.Id, ChallengeFixture.UserId, targets.Select(x => new GameMove(x)).ToArray());
+
+        var matching = (await game.GetAsync(fixture.CourseId, ChallengeFixture.UserId))!.Levels.Single(x => x.Number == 2);
+        var matchingMoves = matching.Cards.Where(x => x.IsPrompt).Select(prompt =>
+        {
+            var number = prompt.Text.Split(' ').Last();
+            var answer = matching.Cards.Single(x => !x.IsPrompt && x.Text.EndsWith(number));
+            return new GameMove(prompt.Id, answer.Id);
+        }).ToArray();
+        var matchingResult = await game.SubmitAsync(matching.Id, ChallengeFixture.UserId, matchingMoves);
+
+        var jigsaw = (await game.GetAsync(fixture.CourseId, ChallengeFixture.UserId))!.Levels.Single(x => x.Number == 3);
+        var jigsawMoves = jigsaw.Cards.Select(piece =>
+            new GameMove(piece.Id, Position: int.Parse(piece.Text.Split(' ').Last()))).ToArray();
+        var jigsawResult = await game.SubmitAsync(jigsaw.Id, ChallengeFixture.UserId, jigsawMoves);
+
+        Assert.True(matchingResult.Passed);
+        Assert.True(jigsawResult.Passed);
+        Assert.Equal(100m, matchingResult.Percentage);
+        Assert.Equal(100m, jigsawResult.Percentage);
     }
 
     private sealed class ChallengeFixture(SqliteConnection connection, TestFactory factory, int courseId) : IAsyncDisposable
@@ -92,22 +159,39 @@ public sealed class LearningChallengeServiceTests
                 }).ToList()
             };
             var game = new CourseGame { Course = course, Title = "Begrepsjakt", Intro = "Test" };
-            game.Levels = Enumerable.Range(1, 3).Select(levelNumber => new GameLevel
-            {
-                LevelNumber = levelNumber,
-                Title = $"Nivå {levelNumber}",
-                Instructions = "Velg fire",
-                MaxPoints = 8,
-                Cards = Enumerable.Range(1, 4).Select(x => new GameCard { Text = $"Riktig {x}", IsTarget = true, SortOrder = x })
-                    .Concat(Enumerable.Range(1, 4).Select(x => new GameCard { Text = $"Feil {x}", SortOrder = x + 4 })).ToList()
-            }).ToList();
+            game.Levels =
+            [
+                new GameLevel
+                {
+                    LevelNumber = 1, Mode = GameLevelMode.CardSort, Title = "Nivå 1", Instructions = "Velg fire", MaxPoints = 8,
+                    Cards = Enumerable.Range(1, 4).Select(x => new GameCard { Text = $"Riktig {x}", IsTarget = true, SortOrder = x })
+                        .Concat(Enumerable.Range(1, 4).Select(x => new GameCard { Text = $"Feil {x}", SortOrder = x + 4 })).ToList()
+                },
+                new GameLevel
+                {
+                    LevelNumber = 2, Mode = GameLevelMode.Matching, Title = "Nivå 2", Instructions = "Koble fire", MaxPoints = 8,
+                    Cards = Enumerable.Range(1, 4).SelectMany(x => new[]
+                    {
+                        new GameCard { Text = $"Spørsmål {x}", PairKey = $"par-{x}", IsTarget = true, SortOrder = x },
+                        new GameCard { Text = $"Svar {x}", PairKey = $"par-{x}", SortOrder = x + 4 }
+                    }).ToList()
+                },
+                new GameLevel
+                {
+                    LevelNumber = 3, Mode = GameLevelMode.Jigsaw, Title = "Nivå 3", Instructions = "Bygg fire", MaxPoints = 8,
+                    Cards = Enumerable.Range(1, 4).Select(x => new GameCard
+                        { Text = $"Brikke {x}", CorrectPosition = x, IsTarget = true, SortOrder = x }).ToList()
+                }
+            ];
             db.CourseGames.Add(game);
             await db.SaveChangesAsync();
             return new ChallengeFixture(connection, factory, course.Id);
         }
 
-        public QuizService CreateQuizService() => new(Factory, new ScoreCalculator(), new ChallengePointCalculator(), new GradeEligibilityPolicy());
-        public CourseGameService CreateGameService() => new(Factory, new ChallengePointCalculator(), new GradeEligibilityPolicy());
+        public QuizService CreateQuizService() => new(Factory, new ScoreCalculator(), new ChallengePointCalculator(),
+            new GradeEligibilityPolicy(), new AttemptLockoutPolicy());
+        public CourseGameService CreateGameService() => new(Factory, new ChallengePointCalculator(),
+            new GradeEligibilityPolicy(), new AttemptLockoutPolicy());
 
         public async Task<Dictionary<int, int>> GetQuizAnswersAsync(int correctAnswers)
         {

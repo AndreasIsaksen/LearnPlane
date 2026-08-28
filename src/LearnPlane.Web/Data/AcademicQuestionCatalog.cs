@@ -5,13 +5,24 @@ namespace LearnPlane.Web.Data;
 internal static class AcademicQuestionCatalog
 {
     public static ICollection<QuizQuestion> Build(int grade, string subject, AcademicTopic topic,
-        AcademicTopic[] subjectTopics, int courseNumber) => subject switch
+        AcademicTopic[] subjectTopics, int courseNumber)
+    {
+        var primary = (subject switch
         {
             "Matematikk" => BuildMathematics(grade, topic.Name, courseNumber),
             "Engelsk" => BuildEnglish(grade, topic.Name, courseNumber),
             "Norsk" => BuildNorwegian(grade, topic.Name, courseNumber),
             _ => BuildAppliedSubjectQuestions(grade, subject, topic, subjectTopics, courseNumber)
-        };
+        }).ToList();
+        var supplemental = BuildSupplementalQuestions(grade, subject, topic, subjectTopics, courseNumber).ToList();
+        var questions = primary.Concat(supplemental).ToList();
+        for (var index = 0; index < questions.Count; index++)
+        {
+            questions[index].SortOrder = index + 1;
+            questions[index].Text = $"{grade}. trinn · {subject}: {questions[index].Text}";
+        }
+        return questions;
+    }
 
     private static ICollection<QuizQuestion> BuildMathematics(int grade, string topic, int variant)
     {
@@ -223,11 +234,54 @@ internal static class AcademicQuestionCatalog
         return MakeQuestions(seeds, grade, variant);
     }
 
+    private static ICollection<QuizQuestion> BuildSupplementalQuestions(int grade, string subject,
+        AcademicTopic topic, AcademicTopic[] topics, int variant)
+    {
+        var others = topics.Where(x => x != topic).ToArray();
+        var offset = (grade * 2 + variant) % others.Length;
+        AcademicTopic O(int index) => others[(offset + index) % others.Length];
+        var seeds = new[]
+        {
+            Q($"Hvilket begrepspar hører mest direkte til «{topic.Name}»?",
+                $"{topic.Terms[0]} og {topic.Terms[1]}", $"{O(0).Terms[0]} og {O(0).Terms[1]}",
+                $"{O(1).Terms[0]} og {O(1).Terms[1]}", $"{O(2).Terms[0]} og {O(2).Terms[1]}",
+                $"{topic.Terms[0]} og {topic.Terms[1]} er sentrale begreper i {topic.Name.ToLowerInvariant()}."),
+            Q($"Hvilket eksempel anvender temaet «{topic.Name}» i en konkret situasjon?",
+                topic.Example, O(0).Example, O(1).Example, O(2).Example,
+                $"Eksemplet viser hvordan kjerneideen brukes: {topic.Core}"),
+            Q($"Hvilket utsagn bruker begrepet «{topic.Terms[2]}» i riktig faglig sammenheng?",
+                $"Begrepet «{topic.Terms[2]}» brukes når vi arbeider med {topic.Name.ToLowerInvariant()} og undersøker kjerneideen i kurset.",
+                $"«{topic.Terms[2]}» betyr alltid det samme som {O(0).Terms[2]}.",
+                $"«{topic.Terms[2]}» gjør dokumentasjon og begrunnelse unødvendig.",
+                $"«{topic.Terms[2]}» kan bare brukes utenfor {subject.ToLowerInvariant()}.",
+                $"Begrepet hører til dette temaet og må forstås i sammenheng med {topic.Core.ToLowerInvariant()}"),
+            Q($"Hva er den beste faglige kontrollen etter arbeid med «{topic.Name}»?",
+                "Kontroller at konklusjonen følger av opplysningene, metoden og fagbegrepene som er brukt.",
+                "Velg det første svaret uten å kontrollere sammenhengen.",
+                "Bytt tema dersom resultatet er overraskende.",
+                "Fjern alle mellomsteg og all dokumentasjon.",
+                "Etterkontroll gjør resonnementet etterprøvbart og kan avdekke feil eller svake begrunnelser."),
+            Q($"En løsning nevner «{topic.Terms[3]}», men viser ingen sammenheng eller begrunnelse. Hva mangler?",
+                "En forklaring på hvordan begrepet støtter løsningen i den konkrete situasjonen.",
+                "Flere tilfeldige begreper fra andre temaer.",
+                "En konklusjon som motsier alle opplysningene.",
+                "At den samme setningen gjentas uten endring.",
+                "Fagbegreper viser forståelse først når de kobles presist til observasjoner, beregninger eller tekstbevis."),
+            Q($"Hvilken elevrespons viser best overføring av kunnskap om «{topic.Name}»?",
+                "Eleven bruker kjerneideen på et nytt eksempel og forklarer både likheter og viktige forskjeller.",
+                "Eleven kopierer eksemplet ordrett uten å undersøke en ny situasjon.",
+                "Eleven velger svar etter lengden på alternativene.",
+                "Eleven unngår alle nøkkelbegrepene fra temaet.",
+                "Overføring betyr å bruke forståelsen i en ny sammenheng, ikke bare å huske formuleringen fra kurset.")
+        };
+        return MakeQuestions(seeds, grade, variant + 4);
+    }
+
     private static ICollection<QuizQuestion> MakeQuestions(IEnumerable<QuestionSeed> seeds, int grade, int variant)
     {
         var openings = new[] { "Løs oppgaven:", "Tenk faglig:", "Bruk det du har lært:", "Vis forståelse:" };
         return seeds.Select((seed, index) => Question(index + 1,
-            seed with { Text = $"{openings[index]} {seed.Text} Oppgaven er tilpasset {grade}. trinn." },
+            seed with { Text = $"{openings[index % openings.Length]} {seed.Text} Oppgaven er tilpasset {grade}. trinn." },
             (grade + variant + index) % 4)).ToList();
     }
 

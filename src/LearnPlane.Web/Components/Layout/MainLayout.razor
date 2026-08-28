@@ -1,11 +1,15 @@
 @inherits LayoutComponentBase
 
 <div class="app-shell">
-    <aside class="sidebar">
-        <div class="brand"><span class="brand-mark">LP</span><span>LearnPlane</span></div>
+    <button class="sidebar-backdrop @(_mobileMenuOpen ? "visible" : "")" aria-label="Lukk navigasjonsmenyen"
+            tabindex="@(_mobileMenuOpen ? 0 : -1)" @onclick="CloseMobileMenu"></button>
+    <aside id="main-navigation" class="sidebar @(_mobileMenuOpen ? "mobile-open" : "")">
+        <div class="brand"><span class="brand-mark">LP</span><span>LearnPlane</span>
+            <button class="mobile-menu-close" aria-label="Lukk meny" @onclick="CloseMobileMenu">×</button>
+        </div>
         <AuthorizeView>
             <Authorized>
-                <NavMenu />
+                <NavMenu OnNavigate="CloseMobileMenu" />
             </Authorized>
             <NotAuthorized>
                 <p class="sidebar-intro">Lær i ditt tempo, fra 1. til 10. trinn.</p>
@@ -14,6 +18,13 @@
     </aside>
     <div class="page-column">
         <header class="topbar">
+            <div class="mobile-nav-start">
+                <button class="mobile-menu-button" aria-label="Åpne navigasjonsmenyen" aria-controls="main-navigation"
+                        aria-expanded="@(_mobileMenuOpen ? "true" : "false")" @onclick="ToggleMobileMenu">
+                    <span></span><span></span><span></span>
+                </button>
+                <span class="mobile-wordmark">LearnPlane</span>
+            </div>
             <AuthorizeView>
                 <Authorized Context="auth">
                     <span>Hei, @auth.User.Identity?.Name!</span>
@@ -30,3 +41,9 @@
     </div>
 </div>
 <div id="blazor-error-ui">Noe gikk galt. <a href="." class="reload">Last inn på nytt</a></div>
+
+@code {
+    private bool _mobileMenuOpen;
+    private void ToggleMobileMenu() => _mobileMenuOpen = !_mobileMenuOpen;
+    private void CloseMobileMenu() => _mobileMenuOpen = false;
+}

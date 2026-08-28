@@ -9,8 +9,21 @@ public sealed class QuizService(
     IDbContextFactory<LearnPlaneDbContext> dbFactory,
     ScoreCalculator calculator,
     ChallengePointCalculator pointCalculator,
-    GradeEligibilityPolicy gradePolicy)
+    GradeEligibilityPolicy gradePolicy,
+    AttemptLockoutPolicy lockoutPolicy)
 {
+    public async Task<ChallengeLockoutStatus> GetLockoutAsync(int courseId, string userId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var failures = await db.QuizAttempts.AsNoTracking()
+            .Where(x => x.UserId == userId && x.CourseId == courseId && !x.Passed)
+            .OrderByDescending(x => x.CompletedAtUtc)
+            .Select(x => x.CompletedAtUtc)
+            .Take(AttemptLockoutPolicy.FailureThreshold)
+            .ToListAsync();
+        return lockoutPolicy.Evaluate(failures, DateTime.UtcNow);
+    }
+
     public async Task<QuizSubmission> SubmitAsync(int courseId, string userId, IReadOnlyDictionary<int, int> answers)
     {
         await using var strategyContext = await dbFactory.CreateDbContextAsync();
@@ -26,6 +39,17 @@ public sealed class QuizService(
             .Include(x => x.Questions).ThenInclude(x => x.Options)
             .SingleOrDefaultAsync(x => x.Id == courseId && x.IsPublished)
             ?? throw new InvalidOperationException("Kurset finnes ikke.");
+
+        var nowUtc = DateTime.UtcNow;
+        var recentFailures = await db.QuizAttempts
+            .Where(x => x.UserId == userId && x.CourseId == courseId && !x.Passed)
+            .OrderByDescending(x => x.CompletedAtUtc)
+            .Select(x => x.CompletedAtUtc)
+            .Take(AttemptLockoutPolicy.FailureThreshold)
+            .ToListAsync();
+        var currentLockout = lockoutPolicy.Evaluate(recentFailures, nowUtc);
+        if (currentLockout.IsLocked)
+            throw new ChallengeLockedException(currentLockout);
 
         var correct = course.Questions.Count(question =>
             answers.TryGetValue(question.Id, out var optionId) &&
@@ -48,13 +72,18 @@ public sealed class QuizService(
             TotalQuestions = score.TotalQuestions,
             Percentage = score.Percentage,
             Passed = score.Passed,
-            PointsAwarded = awarded
+            PointsAwarded = awarded,
+            CompletedAtUtc = nowUtc
         });
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
+        var lockout = score.Passed
+            ? ChallengeLockoutStatus.Unlocked
+            : lockoutPolicy.Evaluate(recentFailures.Prepend(nowUtc), nowUtc);
         return new QuizSubmission(score, awarded, maxPoints, canEarn,
-            userAge is null ? null : gradePolicy.GetCurrentGrade(userAge.Value));
+            userAge is null ? null : gradePolicy.GetCurrentGrade(userAge.Value), lockout);
     }
 }
 
-public sealed record QuizSubmission(QuizScore Score, int NewlyAwardedPoints, int MaxPoints, bool CanEarnPoints, int? CurrentGrade);
+public sealed record QuizSubmission(QuizScore Score, int NewlyAwardedPoints, int MaxPoints, bool CanEarnPoints,
+    int? CurrentGrade, ChallengeLockoutStatus Lockout);

@@ -47,6 +47,7 @@ builder.Services.AddSingleton<PointBalanceCalculator>();
 builder.Services.AddSingleton<ScoreCalculator>();
 builder.Services.AddSingleton<ChallengePointCalculator>();
 builder.Services.AddSingleton<GradeEligibilityPolicy>();
+builder.Services.AddSingleton<AttemptLockoutPolicy>();
 
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
 if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
