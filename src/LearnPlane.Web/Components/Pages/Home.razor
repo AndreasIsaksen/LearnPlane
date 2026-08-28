@@ -15,13 +15,14 @@ else
         <div>
             <div class="eyebrow">Din læringsreise</div>
             <h1>Hva vil du lære i dag?</h1>
-            <p>Velg et trinn og et fag. Du har tilgang til alt, og kan alltid prøve en quiz på nytt.</p>
+            <p>Velg et trinn og et fag. Du har tilgang til alt, og kan alltid prøve quizene og spillene på nytt.</p>
         </div>
         <div class="hero-score"><strong>@_points</strong><span>tilgjengelige poeng</span></div>
     </section>
 
     <section class="stats-grid" aria-label="Din framdrift">
         <article><strong>@_completedCourses</strong><span>kurs bestått</span></article>
+        <article><strong>@_completedGameLevels</strong><span>spillnivåer bestått</span></article>
         <article><strong>@_bestPercentage.ToString("0") %</strong><span>beste resultat</span></article>
         <article><strong>@_availableCourses</strong><span>kurs tilgjengelig</span></article>
     </section>
@@ -46,6 +47,7 @@ else
     private bool _loading = true;
     private int _points;
     private int _completedCourses;
+    private int _completedGameLevels;
     private int _availableCourses;
     private decimal _bestPercentage;
 
@@ -55,9 +57,11 @@ else
         var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         await using var db = await DbFactory.CreateDbContextAsync();
         var attempts = await db.QuizAttempts.AsNoTracking().Where(x => x.UserId == userId).ToListAsync();
+        var gameAttempts = await db.GameLevelAttempts.AsNoTracking().Where(x => x.UserId == userId).ToListAsync();
         var spentPoints = await db.RewardPurchases.AsNoTracking().Where(x => x.UserId == userId).SumAsync(x => (int?)x.TotalPoints) ?? 0;
-        _points = Math.Max(0, attempts.Sum(x => x.PointsAwarded) - spentPoints);
+        _points = Math.Max(0, attempts.Sum(x => x.PointsAwarded) + gameAttempts.Sum(x => x.PointsAwarded) - spentPoints);
         _completedCourses = attempts.Where(x => x.Passed).Select(x => x.CourseId).Distinct().Count();
+        _completedGameLevels = gameAttempts.Where(x => x.Passed).Select(x => x.GameLevelId).Distinct().Count();
         _bestPercentage = attempts.Count == 0 ? 0 : attempts.Max(x => x.Percentage);
         _availableCourses = await db.Courses.CountAsync(x => x.IsPublished);
         _loading = false;

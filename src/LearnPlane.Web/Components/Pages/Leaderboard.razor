@@ -3,7 +3,7 @@
 @inject IDbContextFactory<LearnPlaneDbContext> DbFactory
 
 <PageTitle>Resultatliste – LearnPlane</PageTitle>
-<div class="page-header"><div class="eyebrow">Felles framgang</div><h1>Resultatliste</h1><p>Beste resultat per kurs teller. Antall forsøk vises aldri.</p></div>
+<div class="page-header"><div class="eyebrow">Felles framgang</div><h1>Resultatliste</h1><p>Beste quizresultat per kurs og beste spillresultat per nivå teller. Antall forsøk vises aldri.</p></div>
 
 @if (_rows is null)
 {
@@ -11,7 +11,7 @@
 }
 else if (_rows.Count == 0)
 {
-    <div class="empty-state"><h2>Ingen resultater ennå</h2><p>Bestå en quiz for å bli den første på listen.</p></div>
+    <div class="empty-state"><h2>Ingen resultater ennå</h2><p>Bestå en quiz eller et spillnivå for å bli den første på listen.</p></div>
 }
 else
 {
@@ -22,8 +22,8 @@ else
             <div class="leader-row @(index < 3 ? $"top-{index + 1}" : "")">
                 <span class="rank">@(index + 1)</span>
                 <span class="avatar">@Initials(row.Name)</span>
-                <span class="leader-name"><strong>@row.Name</strong><small>@row.Courses kurs bestått</small></span>
-                <span><strong>@row.CorrectAnswers</strong><small>riktige svar</small></span>
+                <span class="leader-name"><strong>@row.Name</strong><small>@row.Courses quizzer · @row.GameLevels spillnivåer</small></span>
+                <span><strong>@row.CorrectAnswers</strong><small>riktige valg</small></span>
                 <span><strong>@row.Points</strong><small>poeng</small></span>
             </div>
         }
@@ -35,18 +35,27 @@ else
     protected override async Task OnInitializedAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        var attempts = await db.QuizAttempts.AsNoTracking().Where(x => x.Passed)
+        var quizAttempts = await db.QuizAttempts.AsNoTracking().Where(x => x.Passed)
             .Select(x => new { x.UserId, x.CourseId, x.CorrectAnswers, x.Percentage }).ToListAsync();
+        var gameAttempts = await db.GameLevelAttempts.AsNoTracking().Where(x => x.Passed)
+            .Select(x => new { x.UserId, x.GameLevelId, x.CorrectSelections, x.Percentage }).ToListAsync();
         var users = await db.Users.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.DisplayName);
-        var best = attempts.GroupBy(x => new { x.UserId, x.CourseId })
+        var bestQuiz = quizAttempts.GroupBy(x => new { x.UserId, x.CourseId })
             .Select(x => x.OrderByDescending(y => y.CorrectAnswers).ThenByDescending(y => y.Percentage).First()).ToList();
-        var pointsByUser = await db.QuizAttempts.AsNoTracking().GroupBy(x => x.UserId)
+        var bestGame = gameAttempts.GroupBy(x => new { x.UserId, x.GameLevelId })
+            .Select(x => x.OrderByDescending(y => y.CorrectSelections).ThenByDescending(y => y.Percentage).First()).ToList();
+        var quizPoints = await db.QuizAttempts.AsNoTracking().GroupBy(x => x.UserId)
             .Select(x => new { UserId = x.Key, Points = x.Sum(y => y.PointsAwarded) }).ToDictionaryAsync(x => x.UserId, x => x.Points);
-        _rows = best.GroupBy(x => x.UserId).Select(group => new LeaderRow(
-                users.GetValueOrDefault(group.Key, "Ukjent"), group.Sum(x => x.CorrectAnswers),
-                pointsByUser.GetValueOrDefault(group.Key), group.Count()))
+        var gamePoints = await db.GameLevelAttempts.AsNoTracking().GroupBy(x => x.UserId)
+            .Select(x => new { UserId = x.Key, Points = x.Sum(y => y.PointsAwarded) }).ToDictionaryAsync(x => x.UserId, x => x.Points);
+        var participatingUsers = bestQuiz.Select(x => x.UserId).Concat(bestGame.Select(x => x.UserId)).Distinct();
+        _rows = participatingUsers.Select(userId => new LeaderRow(
+                users.GetValueOrDefault(userId, "Ukjent"),
+                bestQuiz.Where(x => x.UserId == userId).Sum(x => x.CorrectAnswers) + bestGame.Where(x => x.UserId == userId).Sum(x => x.CorrectSelections),
+                quizPoints.GetValueOrDefault(userId) + gamePoints.GetValueOrDefault(userId),
+                bestQuiz.Count(x => x.UserId == userId), bestGame.Count(x => x.UserId == userId)))
             .OrderByDescending(x => x.CorrectAnswers).ThenByDescending(x => x.Points).ThenBy(x => x.Name).ToList();
     }
     private static string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(x => char.ToUpperInvariant(x[0])));
-    private sealed record LeaderRow(string Name, int CorrectAnswers, int Points, int Courses);
+    private sealed record LeaderRow(string Name, int CorrectAnswers, int Points, int Courses, int GameLevels);
 }

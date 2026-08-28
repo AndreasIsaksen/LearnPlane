@@ -1,0 +1,164 @@
+@page "/kurs/{Id:int}/spill"
+@attribute [Authorize]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject CourseGameService GameService
+
+<PageTitle>Begrepsjakt – LearnPlane</PageTitle>
+
+@if (_game is null && !_notFound)
+{
+    <div class="loading">Bygger spillebrettet …</div>
+}
+else if (_notFound)
+{
+    <div class="empty-state"><h1>Spillet finnes ikke</h1><p>Gå tilbake til kurset og prøv igjen.</p></div>
+}
+else if (_result is not null)
+{
+    <section class="result-card @(_result.Passed ? "passed" : "not-passed")">
+        <div class="result-icon">@(_result.Passed ? "★" : "↻")</div>
+        <div class="eyebrow">Nivå @_result.LevelNumber</div>
+        <h1>@(_result.Passed ? "Oppdrag fullført!" : "Nesten der!")</h1>
+        <p>Du fant @_result.Correct av @_result.Total riktige begreper (@_result.Percentage.ToString("0") %).</p>
+        @if (!_result.CanEarnPoints)
+        {
+            <div class="alert info">Spillet er under ditt nåværende klassetrinn, så du kan spille fritt uten at det deles ut poeng.</div>
+        }
+        else if (_result.NewlyAwardedPoints > 0)
+        {
+            <div class="points-earned">+@_result.NewlyAwardedPoints poeng</div>
+        }
+        else if (_result.Passed)
+        {
+            <p>Ingen nye poeng denne gangen. Du kan nå 100 % for å sikre hele nivåpotten på @_result.MaxPoints poeng.</p>
+        }
+        <div class="button-row">
+            <button class="button secondary" @onclick="PlayAgain">Spill nivået igjen</button>
+            @if (_result.Passed && _result.LevelNumber < 3)
+            {
+                <button class="button game-button" @onclick="NextLevel">Neste nivå →</button>
+            }
+            else
+            {
+                <a class="button" href="@($"/kurs/{Id}")">Til kurset</a>
+            }
+        </div>
+    </section>
+}
+else if (_game is not null && CurrentLevel is not null)
+{
+    <header class="game-header">
+        <a class="back-link" href="@($"/kurs/{Id}")">← Tilbake til kurset</a>
+        <div class="eyebrow">@_game.Subject · @_game.Grade. klasse</div>
+        <h1>@_game.Title</h1>
+        <p>@_game.Intro</p>
+        @if (!_game.CanEarnPoints)
+        {
+            <div class="alert info">Du går normalt i @_game.CurrentGrade. klasse. Du kan fullføre spillet, men lavere trinn gir ikke poeng.</div>
+        }
+    </header>
+
+    <nav class="level-track" aria-label="Spillnivåer">
+        @foreach (var level in _game.Levels)
+        {
+            <button class="level-step @(level.Id == _levelId ? "active" : "") @(level.Passed ? "complete" : "")"
+                    disabled="@(!level.Unlocked)" @onclick="() => SelectLevel(level.Id)">
+                <span>@(level.Unlocked ? level.Passed ? "✓" : level.Number : "🔒")</span>
+                <strong>@level.Title</strong>
+                <small>@level.MaxPoints poeng</small>
+            </button>
+        }
+    </nav>
+
+    <section class="game-board">
+        <div class="game-mission">
+            <div><div class="eyebrow">Nivå @CurrentLevel.Number av 3</div><h2>@CurrentLevel.Title</h2><p>@CurrentLevel.Instructions</p></div>
+            <div class="selection-counter"><strong>@_selected.Count/@TargetCount</strong><span>valgt</span></div>
+        </div>
+        <div class="word-grid">
+            @foreach (var card in CurrentLevel.Cards)
+            {
+                <button class="word-card @(_selected.Contains(card.Id) ? "selected" : "")"
+                        aria-pressed="@_selected.Contains(card.Id)" @onclick="() => Toggle(card.Id)">
+                    <span aria-hidden="true">@(_selected.Contains(card.Id) ? "✦" : "◇")</span>@card.Text
+                </button>
+            }
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_error)) { <div class="alert error">@_error</div> }
+        <div class="game-actions">
+            <span>70 % gir ¾ av poengene. 100 % sikrer resten.</span>
+            <button class="button game-button" disabled="@(_selected.Count != TargetCount || _submitting)" @onclick="SubmitAsync">
+                @(_submitting ? "Sjekker …" : "Fullfør oppdraget")
+            </button>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private GameView? _game;
+    private GameSubmission? _result;
+    private readonly HashSet<int> _selected = [];
+    private string? _userId;
+    private string? _error;
+    private int _levelId;
+    private bool _submitting;
+    private bool _notFound;
+    private GameLevelView? CurrentLevel => _game?.Levels.SingleOrDefault(x => x.Id == _levelId);
+    private int TargetCount => CurrentLevel?.Cards.Count / 2 ?? 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await ReloadAsync();
+        _levelId = _game?.Levels.FirstOrDefault(x => x.Unlocked && !x.Passed)?.Id
+            ?? _game?.Levels.LastOrDefault(x => x.Unlocked)?.Id ?? 0;
+    }
+
+    private async Task ReloadAsync()
+    {
+        _game = await GameService.GetAsync(Id, _userId!);
+        _notFound = _game is null;
+    }
+
+    private void SelectLevel(int id)
+    {
+        _levelId = id;
+        _selected.Clear();
+        _error = null;
+    }
+
+    private void Toggle(int cardId)
+    {
+        _error = null;
+        if (!_selected.Remove(cardId) && _selected.Count < TargetCount) _selected.Add(cardId);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_userId is null || CurrentLevel is null) return;
+        _submitting = true;
+        try
+        {
+            _result = await GameService.SubmitAsync(CurrentLevel.Id, _userId, _selected);
+            await ReloadAsync();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        finally { _submitting = false; }
+    }
+
+    private void PlayAgain()
+    {
+        _selected.Clear();
+        _result = null;
+        _error = null;
+    }
+
+    private void NextLevel()
+    {
+        var next = _game?.Levels.SingleOrDefault(x => x.Number == _result!.LevelNumber + 1 && x.Unlocked);
+        if (next is not null) _levelId = next.Id;
+        PlayAgain();
+    }
+}

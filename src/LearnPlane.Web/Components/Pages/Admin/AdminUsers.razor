@@ -3,7 +3,7 @@
 @inject UserManager<ApplicationUser> UserManager
 
 <PageTitle>Brukere – LearnPlane</PageTitle>
-<div class="page-header"><div class="eyebrow">Administrasjon</div><h1>Brukere og passord</h1><p>Rediger visningsnavn eller sett et nytt passord. Passord kan aldri leses ut.</p></div>
+<div class="page-header"><div class="eyebrow">Administrasjon</div><h1>Brukere og passord</h1><p>Rediger visningsnavn og alder, eller sett et nytt passord. Passord kan aldri leses ut.</p></div>
 
 @if (!string.IsNullOrWhiteSpace(_message)) { <div class="alert @(_success ? "success" : "error")">@_message</div> }
 
@@ -27,7 +27,8 @@
             <div class="eyebrow">Brukerprofil</div><h2>@_selected.UserName</h2>
             <div class="form-stack">
                 <label>Visningsnavn<input @bind="_displayName" maxlength="100" /></label>
-                <button class="button secondary" @onclick="SaveNameAsync">Lagre navn</button>
+                <label>Alder<input type="number" min="6" max="18" @bind="_age" /><small>@GradeText</small></label>
+                <button class="button secondary" @onclick="SaveProfileAsync">Lagre profil</button>
                 <hr />
                 <label>Nytt passord<input type="password" @bind="_newPassword" autocomplete="new-password" /><small>Minst 8 tegn, en liten bokstav og et tall.</small></label>
                 <label>Gjenta nytt passord<input type="password" @bind="_confirmPassword" autocomplete="new-password" /></label>
@@ -41,6 +42,7 @@
     private List<ApplicationUser> _users = [];
     private ApplicationUser? _selected;
     private string _displayName = string.Empty;
+    private int? _age;
     private string _newPassword = string.Empty;
     private string _confirmPassword = string.Empty;
     private string? _message;
@@ -50,14 +52,19 @@
     private async Task ReloadAsync() => _users = await UserManager.Users.OrderBy(x => x.DisplayName).ToListAsync();
     private void Select(ApplicationUser user)
     {
-        _selected = user; _displayName = user.DisplayName; _newPassword = _confirmPassword = string.Empty; _message = null;
+        _selected = user; _displayName = user.DisplayName; _age = user.Age; _newPassword = _confirmPassword = string.Empty; _message = null;
     }
-    private async Task SaveNameAsync()
+    private string GradeText => _age is >= 6 and <= 18
+        ? $"Tilsvarer {Math.Clamp(_age.Value - 5, 1, 10)}. klasse for poengreglene."
+        : "Sett alder mellom 6 og 18 år.";
+    private async Task SaveProfileAsync()
     {
         if (_selected is null || string.IsNullOrWhiteSpace(_displayName)) return;
+        if (_age is < 6 or > 18) { _success = false; _message = "Alder må være mellom 6 og 18 år."; return; }
         _selected.DisplayName = _displayName.Trim();
+        _selected.Age = _age;
         var result = await UserManager.UpdateAsync(_selected);
-        ShowResult(result, "Navnet er lagret.");
+        ShowResult(result, "Profilen er lagret.");
         if (result.Succeeded) await ReloadAsync();
     }
     private async Task ResetPasswordAsync()

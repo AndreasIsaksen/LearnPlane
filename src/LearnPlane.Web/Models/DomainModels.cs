@@ -14,7 +14,9 @@ public sealed class ApplicationUser : IdentityUser
     [MaxLength(100)]
     public string DisplayName { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    [Range(6, 18)] public int? Age { get; set; }
     public ICollection<QuizAttempt> QuizAttempts { get; set; } = [];
+    public ICollection<GameLevelAttempt> GameLevelAttempts { get; set; } = [];
     public ICollection<CartItem> CartItems { get; set; } = [];
     public ICollection<RewardPurchase> RewardPurchases { get; set; } = [];
 }
@@ -39,6 +41,7 @@ public sealed class Course
     public int SortOrder { get; set; }
     public ICollection<QuizQuestion> Questions { get; set; } = [];
     public ICollection<QuizAttempt> Attempts { get; set; } = [];
+    public CourseGame? Game { get; set; }
 }
 
 public sealed class QuizQuestion
@@ -71,6 +74,55 @@ public sealed class QuizAttempt
     public Course Course { get; set; } = null!;
     public int CorrectAnswers { get; set; }
     public int TotalQuestions { get; set; }
+    public decimal Percentage { get; set; }
+    public bool Passed { get; set; }
+    public int PointsAwarded { get; set; }
+    public DateTime CompletedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class CourseGame
+{
+    public int Id { get; set; }
+    public int CourseId { get; set; }
+    public Course Course { get; set; } = null!;
+    [MaxLength(160)] public string Title { get; set; } = string.Empty;
+    [MaxLength(500)] public string Intro { get; set; } = string.Empty;
+    public ICollection<GameLevel> Levels { get; set; } = [];
+}
+
+public sealed class GameLevel
+{
+    public int Id { get; set; }
+    public int CourseGameId { get; set; }
+    public CourseGame CourseGame { get; set; } = null!;
+    [Range(1, 3)] public int LevelNumber { get; set; }
+    [MaxLength(100)] public string Title { get; set; } = string.Empty;
+    [MaxLength(500)] public string Instructions { get; set; } = string.Empty;
+    [Range(1, 20)] public int MaxPoints { get; set; }
+    public ICollection<GameCard> Cards { get; set; } = [];
+    public ICollection<GameLevelAttempt> Attempts { get; set; } = [];
+}
+
+public sealed class GameCard
+{
+    public int Id { get; set; }
+    public int GameLevelId { get; set; }
+    public GameLevel Level { get; set; } = null!;
+    [MaxLength(100)] public string Text { get; set; } = string.Empty;
+    public bool IsTarget { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public sealed class GameLevelAttempt
+{
+    public int Id { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public ApplicationUser User { get; set; } = null!;
+    public int GameLevelId { get; set; }
+    public GameLevel Level { get; set; } = null!;
+    public int CorrectSelections { get; set; }
+    public int IncorrectSelections { get; set; }
+    public int TotalTargets { get; set; }
     public decimal Percentage { get; set; }
     public bool Passed { get; set; }
     public int PointsAwarded { get; set; }

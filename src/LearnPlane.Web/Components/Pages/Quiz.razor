@@ -16,15 +16,16 @@ else if (_result is not null)
         <div class="eyebrow">@(_result.Score.Passed ? "Bestått!" : "Nesten!")</div>
         <h1>@_result.Score.Percentage.ToString("0") % riktig</h1>
         <p>Du svarte riktig på @_result.Score.CorrectAnswers av @_result.Score.TotalQuestions spørsmål.</p>
-        @if (_result.NewlyAwardedPoints > 0) { <div class="points-earned">+@_result.NewlyAwardedPoints poeng</div> }
-        else if (_result.Score.Passed) { <p>Du har allerede fått poengene for dette kurset.</p> }
+        @if (!_result.CanEarnPoints) { <div class="alert info">Dette kurset er under ditt nåværende klassetrinn (@_result.CurrentGrade. klasse), så gjennomføringen gir ikke poeng.</div> }
+        else if (_result.NewlyAwardedPoints > 0) { <div class="points-earned">+@_result.NewlyAwardedPoints poeng</div> }
+        else if (_result.Score.Passed) { <p>Du har allerede fått alle poengene som dette resultatet kan gi. Få 100 % for å sikre hele potten på @_result.MaxPoints poeng.</p> }
         <div class="button-row"><button class="button secondary" @onclick="TryAgain">Prøv igjen</button><a class="button" href="@($"/kurs/{Id}")">Til kurset</a></div>
     </section>
 }
 else
 {
     <PageTitle>Quiz: @_course.Title – LearnPlane</PageTitle>
-    <div class="quiz-header"><div class="eyebrow">@_course.Subject · @_course.Grade. klasse</div><h1>@_course.Title</h1><p>Velg ett svar på hvert spørsmål. 70 % gir bestått.</p></div>
+    <div class="quiz-header"><div class="eyebrow">@_course.Subject · @_course.Grade. klasse</div><h1>@_course.Title</h1><p>Velg ett svar på hvert spørsmål. 70 % gir bestått og ¾ av poengene; 100 % gir hele potten. Hver del av potten deles bare ut én gang.</p></div>
     <div class="quiz-questions">
         @foreach (var question in _course.Questions.OrderBy(x => x.SortOrder))
         {

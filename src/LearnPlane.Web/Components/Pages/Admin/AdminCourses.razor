@@ -108,6 +108,7 @@
     private async Task SaveAsync()
     {
         if (_db is null || _selected is null) return;
+        var isNew = _selected.Id == 0;
         foreach (var question in _selected.Questions)
         {
             if (question.Options.Count(x => x.IsCorrect) != 1)
@@ -116,6 +117,11 @@
             }
         }
         await _db.SaveChangesAsync();
+        if (isNew)
+        {
+            _db.CourseGames.Add(GameCatalog.CreateGame(_selected));
+            await _db.SaveChangesAsync();
+        }
         _success = true; _message = "Kurset og quizinnholdet er lagret.";
         await ReloadListAsync();
     }
