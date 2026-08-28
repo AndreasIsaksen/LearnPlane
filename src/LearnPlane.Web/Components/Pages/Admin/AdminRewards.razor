@@ -1,0 +1,142 @@
+@page "/admin/belønninger"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+
+<PageTitle>Belønninger – LearnPlane</PageTitle>
+<div class="page-header"><div class="eyebrow">Administrasjon</div><h1>Belønningsbutikk</h1><p>Opprett og rediger varer, bilder og priser i poeng. Deaktiverte varer blir skjult i butikken.</p></div>
+
+@if (!string.IsNullOrWhiteSpace(_message)) { <div class="alert @(_success ? "success" : "error")">@_message</div> }
+
+<div class="admin-split rewards-admin">
+    <section class="admin-list">
+        <button class="button button-small" @onclick="StartNew">+ Ny belønning</button>
+        @foreach (var item in _items)
+        {
+            <button class="admin-list-item @(_model.Id == item.Id ? "selected" : "")" @onclick="() => Select(item)">
+                <img class="admin-reward-thumb" src="@item.ImageUrl" alt="" /><span><strong>@item.Name</strong><small>@item.PricePoints poeng · @(item.IsActive ? "Aktiv" : "Skjult")</small></span>
+            </button>
+        }
+    </section>
+    <section class="admin-editor">
+        <EditForm Model="_model" OnValidSubmit="SaveAsync" class="form-stack">
+            <DataAnnotationsValidator /><ValidationSummary />
+            <div class="reward-preview @(_model.ImageUrl.Length == 0 ? "empty-image" : "")">
+                @if (_model.ImageUrl.Length > 0) { <img src="@_model.ImageUrl" alt="Forhåndsvisning av belønning" /> } else { <span>Last opp et bilde</span> }
+            </div>
+            <label>Bilde<InputFile OnChange="HandleImageAsync" accept="image/png,image/jpeg,image/webp,image/gif" /><small>PNG, JPEG, WebP eller GIF, maksimalt 400 KB.</small></label>
+            <label>Navn<InputText @bind-Value="_model.Name" /></label>
+            <label>Beskrivelse<InputTextArea @bind-Value="_model.Description" /></label>
+            <label>Pris i poeng<InputNumber @bind-Value="_model.PricePoints" /></label>
+            <label class="checkbox-label"><InputCheckbox @bind-Value="_model.IsActive" /> Synlig og tilgjengelig i butikken</label>
+            <button class="button" type="submit">@(_model.Id == 0 ? "Opprett belønning" : "Lagre endringer")</button>
+        </EditForm>
+    </section>
+</div>
+
+<section class="section-heading admin-purchases-heading"><div><div class="eyebrow">Kontroll</div><h2>Siste kjøp</h2></div></section>
+@if (_recentPurchases.Count == 0)
+{
+    <div class="empty-state compact"><p>Ingen belønninger er kjøpt ennå.</p></div>
+}
+else
+{
+    <div class="table-wrap"><table><thead><tr><th>Tidspunkt</th><th>Bruker</th><th>Belønninger</th><th>Poeng</th></tr></thead><tbody>@foreach (var purchase in _recentPurchases) { <tr><td>@purchase.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td><td>@purchase.User.DisplayName</td><td>@string.Join(", ", purchase.Lines.Select(x => $"{x.Quantity} × {x.ItemName}"))</td><td>@purchase.TotalPoints</td></tr> }</tbody></table></div>
+}
+
+@code {
+    private const long MaxImageBytes = 400 * 1024;
+    private static readonly HashSet<string> AllowedImageTypes = new(StringComparer.OrdinalIgnoreCase)
+        { "image/png", "image/jpeg", "image/webp", "image/gif" };
+    private List<RewardItem> _items = [];
+    private List<RewardPurchase> _recentPurchases = [];
+    private RewardEditModel _model = new();
+    private string? _message;
+    private bool _success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+        StartNew();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _items = await db.RewardItems.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
+        _recentPurchases = await db.RewardPurchases.AsNoTracking().Include(x => x.User).Include(x => x.Lines)
+            .OrderByDescending(x => x.CreatedAtUtc).Take(25).ToListAsync();
+    }
+
+    private void StartNew()
+    {
+        _model = new RewardEditModel { IsActive = true, PricePoints = 10 };
+        _message = null;
+    }
+
+    private void Select(RewardItem item)
+    {
+        _model = new RewardEditModel
+        {
+            Id = item.Id, Name = item.Name, Description = item.Description, ImageUrl = item.ImageUrl,
+            PricePoints = item.PricePoints, IsActive = item.IsActive
+        };
+        _message = null;
+    }
+
+    private async Task HandleImageAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (!AllowedImageTypes.Contains(file.ContentType))
+        {
+            ShowError("Bildet må være PNG, JPEG, WebP eller GIF."); return;
+        }
+        if (file.Size > MaxImageBytes)
+        {
+            ShowError("Bildet er større enn 400 KB."); return;
+        }
+
+        await using var stream = file.OpenReadStream(MaxImageBytes);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        _model.ImageUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(memory.ToArray())}";
+        _message = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.Name) || string.IsNullOrWhiteSpace(_model.Description))
+        {
+            ShowError("Navn og beskrivelse kan ikke være tomme."); return;
+        }
+        if (string.IsNullOrWhiteSpace(_model.ImageUrl))
+        {
+            ShowError("Last opp et bilde før du lagrer."); return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var item = _model.Id == 0 ? new RewardItem() : await db.RewardItems.SingleAsync(x => x.Id == _model.Id);
+        if (_model.Id == 0) db.RewardItems.Add(item);
+        item.Name = _model.Name.Trim();
+        item.Description = _model.Description.Trim();
+        item.ImageUrl = _model.ImageUrl;
+        item.PricePoints = _model.PricePoints;
+        item.IsActive = _model.IsActive;
+        item.UpdatedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        _model.Id = item.Id;
+        _success = true; _message = "Belønningen er lagret.";
+        await ReloadAsync();
+    }
+
+    private void ShowError(string message) { _success = false; _message = message; }
+
+    private sealed class RewardEditModel
+    {
+        public int Id { get; set; }
+        [Required(ErrorMessage = "Skriv inn et navn."), MaxLength(140)] public string Name { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Skriv inn en beskrivelse."), MaxLength(600)] public string Description { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
+        [Range(1, 100_000, ErrorMessage = "Prisen må være mellom 1 og 100 000 poeng.")] public int PricePoints { get; set; }
+        public bool IsActive { get; set; }
+    }
+}

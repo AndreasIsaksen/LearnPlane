@@ -17,7 +17,7 @@ else
             <h1>Hva vil du lære i dag?</h1>
             <p>Velg et trinn og et fag. Du har tilgang til alt, og kan alltid prøve en quiz på nytt.</p>
         </div>
-        <div class="hero-score"><strong>@_points</strong><span>poeng</span></div>
+        <div class="hero-score"><strong>@_points</strong><span>tilgjengelige poeng</span></div>
     </section>
 
     <section class="stats-grid" aria-label="Din framdrift">
@@ -55,7 +55,8 @@ else
         var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         await using var db = await DbFactory.CreateDbContextAsync();
         var attempts = await db.QuizAttempts.AsNoTracking().Where(x => x.UserId == userId).ToListAsync();
-        _points = attempts.Sum(x => x.PointsAwarded);
+        var spentPoints = await db.RewardPurchases.AsNoTracking().Where(x => x.UserId == userId).SumAsync(x => (int?)x.TotalPoints) ?? 0;
+        _points = Math.Max(0, attempts.Sum(x => x.PointsAwarded) - spentPoints);
         _completedCourses = attempts.Where(x => x.Passed).Select(x => x.CourseId).Distinct().Count();
         _bestPercentage = attempts.Count == 0 ? 0 : attempts.Max(x => x.Percentage);
         _availableCourses = await db.Courses.CountAsync(x => x.IsPublished);
