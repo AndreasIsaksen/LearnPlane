@@ -1,0 +1,34 @@
+@page "/kurs/{Id:int}"
+@attribute [Authorize]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+
+@if (_course is null)
+{
+    <PageTitle>Kurs – LearnPlane</PageTitle>
+    <div class="loading">Laster kurset …</div>
+}
+else
+{
+    <PageTitle>@_course.Title – LearnPlane</PageTitle>
+    <article class="lesson">
+        <a class="back-link" href="@($"/kurs?trinn={_course.Grade}&fag={Uri.EscapeDataString(_course.Subject)}")">← Tilbake til @_course.Subject</a>
+        <div class="course-meta"><span>@_course.Grade. klasse</span><span>@_course.Subject</span><span>@_course.Difficulty</span></div>
+        <h1>@_course.Title</h1>
+        <p class="lead">@_course.Summary</p>
+        <div class="lesson-content">@((MarkupString)_course.Content)</div>
+        <div class="quiz-callout">
+            <div><div class="eyebrow">Klar for å teste deg?</div><h2>Ta quizen</h2><p>Du må ha minst 70 % riktig for å bestå.</p></div>
+            <a class="button" href="@($"/kurs/{_course.Id}/quiz")">Start quiz · @((int)_course.Difficulty * 10) poeng</a>
+        </div>
+    </article>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Course? _course;
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _course = await db.Courses.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id && x.IsPublished);
+    }
+}

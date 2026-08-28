@@ -1,0 +1,87 @@
+@page "/kurs/{Id:int}/quiz"
+@attribute [Authorize]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject QuizService QuizService
+
+@if (_course is null)
+{
+    <div class="loading">Laster quiz …</div>
+}
+else if (_result is not null)
+{
+    <PageTitle>Resultat – LearnPlane</PageTitle>
+    <section class="result-card @(_result.Score.Passed ? "passed" : "not-passed")">
+        <div class="result-icon">@(_result.Score.Passed ? "✓" : "↻")</div>
+        <div class="eyebrow">@(_result.Score.Passed ? "Bestått!" : "Nesten!")</div>
+        <h1>@_result.Score.Percentage.ToString("0") % riktig</h1>
+        <p>Du svarte riktig på @_result.Score.CorrectAnswers av @_result.Score.TotalQuestions spørsmål.</p>
+        @if (_result.NewlyAwardedPoints > 0) { <div class="points-earned">+@_result.NewlyAwardedPoints poeng</div> }
+        else if (_result.Score.Passed) { <p>Du har allerede fått poengene for dette kurset.</p> }
+        <div class="button-row"><button class="button secondary" @onclick="TryAgain">Prøv igjen</button><a class="button" href="@($"/kurs/{Id}")">Til kurset</a></div>
+    </section>
+}
+else
+{
+    <PageTitle>Quiz: @_course.Title – LearnPlane</PageTitle>
+    <div class="quiz-header"><div class="eyebrow">@_course.Subject · @_course.Grade. klasse</div><h1>@_course.Title</h1><p>Velg ett svar på hvert spørsmål. 70 % gir bestått.</p></div>
+    <div class="quiz-questions">
+        @foreach (var question in _course.Questions.OrderBy(x => x.SortOrder))
+        {
+            <fieldset class="question-card">
+                <legend><span>Spørsmål @question.SortOrder</span>@question.Text</legend>
+                @foreach (var option in question.Options.OrderBy(x => x.SortOrder))
+                {
+                    <label class="answer-option">
+                        <input type="radio" name="@($"question-{question.Id}")" value="@option.Id"
+                               checked="@(_answers.GetValueOrDefault(question.Id) == option.Id)"
+                               @onchange="() => SelectAnswer(question.Id, option.Id)" />
+                        <span>@option.Text</span>
+                    </label>
+                }
+            </fieldset>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_error)) { <div class="alert error">@_error</div> }
+    <button class="button submit-quiz" disabled="@_submitting" @onclick="SubmitAsync">@(_submitting ? "Retter …" : "Lever svar")</button>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Course? _course;
+    private readonly Dictionary<int, int> _answers = [];
+    private QuizSubmission? _result;
+    private string? _error;
+    private bool _submitting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _course = await db.Courses.AsNoTracking().Include(x => x.Questions).ThenInclude(x => x.Options)
+            .SingleOrDefaultAsync(x => x.Id == Id && x.IsPublished);
+    }
+
+    private void SelectAnswer(int questionId, int optionId) => _answers[questionId] = optionId;
+
+    private async Task SubmitAsync()
+    {
+        if (_course is null) return;
+        if (_answers.Count != _course.Questions.Count)
+        {
+            _error = "Svar på alle spørsmålene før du leverer.";
+            return;
+        }
+        _submitting = true;
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        _result = await QuizService.SubmitAsync(Id, userId, _answers);
+        _submitting = false;
+    }
+
+    private void TryAgain()
+    {
+        _answers.Clear();
+        _result = null;
+        _error = null;
+    }
+}

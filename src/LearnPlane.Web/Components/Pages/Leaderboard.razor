@@ -1,0 +1,52 @@
+@page "/resultatliste"
+@attribute [Authorize]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+
+<PageTitle>Resultatliste – LearnPlane</PageTitle>
+<div class="page-header"><div class="eyebrow">Felles framgang</div><h1>Resultatliste</h1><p>Beste resultat per kurs teller. Antall forsøk vises aldri.</p></div>
+
+@if (_rows is null)
+{
+    <div class="loading">Regner ut plasseringer …</div>
+}
+else if (_rows.Count == 0)
+{
+    <div class="empty-state"><h2>Ingen resultater ennå</h2><p>Bestå en quiz for å bli den første på listen.</p></div>
+}
+else
+{
+    <div class="leaderboard">
+        @for (var index = 0; index < _rows.Count; index++)
+        {
+            var row = _rows[index];
+            <div class="leader-row @(index < 3 ? $"top-{index + 1}" : "")">
+                <span class="rank">@(index + 1)</span>
+                <span class="avatar">@Initials(row.Name)</span>
+                <span class="leader-name"><strong>@row.Name</strong><small>@row.Courses kurs bestått</small></span>
+                <span><strong>@row.CorrectAnswers</strong><small>riktige svar</small></span>
+                <span><strong>@row.Points</strong><small>poeng</small></span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<LeaderRow>? _rows;
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var attempts = await db.QuizAttempts.AsNoTracking().Where(x => x.Passed)
+            .Select(x => new { x.UserId, x.CourseId, x.CorrectAnswers, x.Percentage }).ToListAsync();
+        var users = await db.Users.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.DisplayName);
+        var best = attempts.GroupBy(x => new { x.UserId, x.CourseId })
+            .Select(x => x.OrderByDescending(y => y.CorrectAnswers).ThenByDescending(y => y.Percentage).First()).ToList();
+        var pointsByUser = await db.QuizAttempts.AsNoTracking().GroupBy(x => x.UserId)
+            .Select(x => new { UserId = x.Key, Points = x.Sum(y => y.PointsAwarded) }).ToDictionaryAsync(x => x.UserId, x => x.Points);
+        _rows = best.GroupBy(x => x.UserId).Select(group => new LeaderRow(
+                users.GetValueOrDefault(group.Key, "Ukjent"), group.Sum(x => x.CorrectAnswers),
+                pointsByUser.GetValueOrDefault(group.Key), group.Count()))
+            .OrderByDescending(x => x.CorrectAnswers).ThenByDescending(x => x.Points).ThenBy(x => x.Name).ToList();
+    }
+    private static string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(x => char.ToUpperInvariant(x[0])));
+    private sealed record LeaderRow(string Name, int CorrectAnswers, int Points, int Courses);
+}

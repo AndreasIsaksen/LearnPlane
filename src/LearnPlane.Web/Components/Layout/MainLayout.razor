@@ -1,0 +1,32 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">LP</span><span>LearnPlane</span></div>
+        <AuthorizeView>
+            <Authorized>
+                <NavMenu />
+            </Authorized>
+            <NotAuthorized>
+                <p class="sidebar-intro">Lær i ditt tempo, fra 1. til 10. trinn.</p>
+            </NotAuthorized>
+        </AuthorizeView>
+    </aside>
+    <div class="page-column">
+        <header class="topbar">
+            <AuthorizeView>
+                <Authorized Context="auth">
+                    <span>Hei, @auth.User.Identity?.Name!</span>
+                    <form method="post" action="/account/logout"><AntiforgeryToken /><button class="link-button" type="submit">Logg ut</button></form>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="/logg-inn">Logg inn</a>
+                    <a class="button button-small" href="/registrer">Lag bruker</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </header>
+        <main class="content">@Body</main>
+        <footer>LearnPlane · Norsk læringsplattform basert på LK20</footer>
+    </div>
+</div>
+<div id="blazor-error-ui">Noe gikk galt. <a href="." class="reload">Last inn på nytt</a></div>

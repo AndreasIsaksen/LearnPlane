@@ -1,0 +1,78 @@
+@page "/admin/brukere"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject UserManager<ApplicationUser> UserManager
+
+<PageTitle>Brukere – LearnPlane</PageTitle>
+<div class="page-header"><div class="eyebrow">Administrasjon</div><h1>Brukere og passord</h1><p>Rediger visningsnavn eller sett et nytt passord. Passord kan aldri leses ut.</p></div>
+
+@if (!string.IsNullOrWhiteSpace(_message)) { <div class="alert @(_success ? "success" : "error")">@_message</div> }
+
+<div class="admin-split">
+    <section class="admin-list">
+        <h2>Alle brukere</h2>
+        @foreach (var user in _users)
+        {
+            <button class="admin-list-item @(_selected?.Id == user.Id ? "selected" : "")" @onclick="() => Select(user)">
+                <span class="avatar">@Initials(user.DisplayName)</span><span><strong>@user.DisplayName</strong><small>@@@user.UserName</small></span>
+            </button>
+        }
+    </section>
+    <section class="admin-editor">
+        @if (_selected is null)
+        {
+            <div class="empty-state"><h2>Velg en bruker</h2><p>Brukerdata og verktøy vises her.</p></div>
+        }
+        else
+        {
+            <div class="eyebrow">Brukerprofil</div><h2>@_selected.UserName</h2>
+            <div class="form-stack">
+                <label>Visningsnavn<input @bind="_displayName" maxlength="100" /></label>
+                <button class="button secondary" @onclick="SaveNameAsync">Lagre navn</button>
+                <hr />
+                <label>Nytt passord<input type="password" @bind="_newPassword" autocomplete="new-password" /><small>Minst 8 tegn, en liten bokstav og et tall.</small></label>
+                <label>Gjenta nytt passord<input type="password" @bind="_confirmPassword" autocomplete="new-password" /></label>
+                <button class="button" @onclick="ResetPasswordAsync">Endre passord</button>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<ApplicationUser> _users = [];
+    private ApplicationUser? _selected;
+    private string _displayName = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private string? _message;
+    private bool _success;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    private async Task ReloadAsync() => _users = await UserManager.Users.OrderBy(x => x.DisplayName).ToListAsync();
+    private void Select(ApplicationUser user)
+    {
+        _selected = user; _displayName = user.DisplayName; _newPassword = _confirmPassword = string.Empty; _message = null;
+    }
+    private async Task SaveNameAsync()
+    {
+        if (_selected is null || string.IsNullOrWhiteSpace(_displayName)) return;
+        _selected.DisplayName = _displayName.Trim();
+        var result = await UserManager.UpdateAsync(_selected);
+        ShowResult(result, "Navnet er lagret.");
+        if (result.Succeeded) await ReloadAsync();
+    }
+    private async Task ResetPasswordAsync()
+    {
+        if (_selected is null) return;
+        if (_newPassword != _confirmPassword) { _success = false; _message = "Passordene er ikke like."; return; }
+        var token = await UserManager.GeneratePasswordResetTokenAsync(_selected);
+        var result = await UserManager.ResetPasswordAsync(_selected, token, _newPassword);
+        ShowResult(result, "Passordet er endret.");
+        if (result.Succeeded) _newPassword = _confirmPassword = string.Empty;
+    }
+    private void ShowResult(IdentityResult result, string successMessage)
+    {
+        _success = result.Succeeded;
+        _message = result.Succeeded ? successMessage : string.Join(" ", result.Errors.Select(x => x.Description));
+    }
+    private static string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(x => char.ToUpperInvariant(x[0])));
+}

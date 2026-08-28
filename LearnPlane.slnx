@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/LearnPlane.Web/LearnPlane.Web.csproj" />
+  <Project Path="tests/LearnPlane.Tests/LearnPlane.Tests.csproj" />
+</Solution>

@@ -1,0 +1,68 @@
+@page "/admin/statistikk"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+
+<PageTitle>Statistikk – LearnPlane</PageTitle>
+<div class="page-header"><div class="eyebrow">Administrasjon</div><h1>Full kursstatistikk</h1><p>Alle gjennomføringer vises her. Denne siden er kun tilgjengelig for administrator.</p></div>
+
+@if (_attempts is null)
+{
+    <div class="loading">Laster statistikk …</div>
+}
+else
+{
+    <section class="stats-grid admin-summary">
+        <article><strong>@_attempts.Count</strong><span>gjennomføringer</span></article>
+        <article><strong>@_attempts.Select(x => x.UserId).Distinct().Count()</strong><span>aktive brukere</span></article>
+        <article><strong>@(_attempts.Count == 0 ? "0" : _attempts.Average(x => x.Percentage).ToString("0")) %</strong><span>gjennomsnitt</span></article>
+        <article><strong>@_attempts.Count(x => x.Passed)</strong><span>bestått</span></article>
+    </section>
+    <div class="filter-bar admin-filters">
+        <label>Bruker
+            <select @bind="_userFilter"><option value="">Alle brukere</option>@foreach (var user in _users) { <option value="@user.Id">@user.Name</option> }</select>
+        </label>
+        <label>Trinn
+            <select @bind="_gradeFilter"><option value="0">Alle trinn</option>@for (var grade = 1; grade <= 10; grade++) { <option value="@grade">@grade. klasse</option> }</select>
+        </label>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Tidspunkt</th><th>Bruker</th><th>Kurs</th><th>Trinn</th><th>Resultat</th><th>Status</th><th>Poeng</th></tr></thead>
+            <tbody>
+            @foreach (var attempt in FilteredAttempts)
+            {
+                <tr>
+                    <td>@attempt.CompletedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>@attempt.UserName</td>
+                    <td><strong>@attempt.CourseTitle</strong><small>@attempt.Subject</small></td>
+                    <td>@attempt.Grade.</td>
+                    <td>@attempt.CorrectAnswers/@attempt.TotalQuestions (@attempt.Percentage.ToString("0") %)</td>
+                    <td><span class="status @(attempt.Passed ? "success" : "muted")">@(attempt.Passed ? "Bestått" : "Ikke bestått")</span></td>
+                    <td>+@attempt.PointsAwarded</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<AttemptRow>? _attempts;
+    private List<UserFilter> _users = [];
+    private string _userFilter = string.Empty;
+    private int _gradeFilter;
+    private IEnumerable<AttemptRow> FilteredAttempts => (_attempts ?? []).Where(x =>
+        (string.IsNullOrEmpty(_userFilter) || x.UserId == _userFilter) && (_gradeFilter == 0 || x.Grade == _gradeFilter));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _users = await db.Users.AsNoTracking().OrderBy(x => x.DisplayName).Select(x => new UserFilter(x.Id, x.DisplayName)).ToListAsync();
+        _attempts = await db.QuizAttempts.AsNoTracking().OrderByDescending(x => x.CompletedAtUtc)
+            .Select(x => new AttemptRow(x.UserId, x.User.DisplayName, x.Course.Title, x.Course.Subject, x.Course.Grade,
+                x.CorrectAnswers, x.TotalQuestions, x.Percentage, x.Passed, x.PointsAwarded, x.CompletedAtUtc)).ToListAsync();
+    }
+    private sealed record UserFilter(string Id, string Name);
+    private sealed record AttemptRow(string UserId, string UserName, string CourseTitle, string Subject, int Grade,
+        int CorrectAnswers, int TotalQuestions, decimal Percentage, bool Passed, int PointsAwarded, DateTime CompletedAtUtc);
+}

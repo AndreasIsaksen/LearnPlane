@@ -1,0 +1,83 @@
+@page "/kurs"
+@attribute [Authorize]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+
+<PageTitle>Kurs – LearnPlane</PageTitle>
+
+<div class="page-header">
+    <div class="eyebrow">Kurskatalog</div>
+    <h1>@(Grade is >= 1 and <= 10 ? $"{Grade}. klasse" : "Alle kurs")</h1>
+    <p>@(string.IsNullOrWhiteSpace(Subject) ? "Velg et fag eller utforsk alle kursene på trinnet." : Subject)</p>
+</div>
+
+<div class="filter-bar">
+    <label>Klasse
+        <select value="@Grade" @onchange="ChangeGrade">
+            <option value="0">Alle</option>
+            @for (var grade = 1; grade <= 10; grade++) { <option value="@grade">@grade. klasse</option> }
+        </select>
+    </label>
+    @if (Grade is >= 1 and <= 10)
+    {
+        <div class="filter-chips">
+            <a class="chip @(string.IsNullOrEmpty(Subject) ? "active" : "")" href="@($"/kurs?trinn={Grade}")">Alle fag</a>
+            @foreach (var subject in CurriculumCatalog.SubjectsForGrade(Grade))
+            {
+                <a class="chip @(Subject == subject ? "active" : "")" href="@($"/kurs?trinn={Grade}&fag={Uri.EscapeDataString(subject)}")">@subject</a>
+            }
+        </div>
+    }
+</div>
+
+@if (_loading)
+{
+    <div class="loading">Laster kurs …</div>
+}
+else if (_courses.Count == 0)
+{
+    <div class="empty-state"><h2>Ingen kurs funnet</h2><p>Prøv et annet trinn eller fag.</p></div>
+}
+else
+{
+    <div class="course-grid">
+        @foreach (var course in _courses)
+        {
+            <article class="course-card">
+                <div class="course-meta"><span>@course.Grade. klasse</span><span>@course.Subject</span></div>
+                <h2>@course.Title</h2>
+                <p>@course.Summary</p>
+                <div class="course-footer">
+                    <span class="difficulty difficulty-@((int)course.Difficulty)">@course.Difficulty · @Points(course.Difficulty) poeng</span>
+                    <a href="@($"/kurs/{course.Id}")">Start kurs →</a>
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "trinn")] public int Grade { get; set; }
+    [SupplyParameterFromQuery(Name = "fag")] public string? Subject { get; set; }
+    private List<Course> _courses = [];
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.Courses.AsNoTracking().Where(x => x.IsPublished);
+        if (Grade is >= 1 and <= 10) query = query.Where(x => x.Grade == Grade);
+        if (!string.IsNullOrWhiteSpace(Subject)) query = query.Where(x => x.Subject == Subject);
+        _courses = await query.OrderBy(x => x.Grade).ThenBy(x => x.Subject).ThenBy(x => x.SortOrder).ToListAsync();
+        _loading = false;
+    }
+
+    private void ChangeGrade(ChangeEventArgs args)
+    {
+        var grade = int.TryParse(args.Value?.ToString(), out var value) ? value : 0;
+        Navigation.NavigateTo(grade == 0 ? "/kurs" : $"/kurs?trinn={grade}");
+    }
+
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+    private static int Points(CourseDifficulty difficulty) => (int)difficulty * 10;
+}
