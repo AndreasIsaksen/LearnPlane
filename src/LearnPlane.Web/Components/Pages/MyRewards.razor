@@ -1,0 +1,36 @@
+@page "/mine-belønninger"
+@attribute [Authorize]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Mine belønninger – LearnPlane</PageTitle>
+<div class="page-header"><div class="eyebrow">Kjøpshistorikk</div><h1>Mine belønninger</h1><p>Her finner du belønningene du har kjøpt med quizpoeng.</p></div>
+
+@if (_purchases is null)
+{
+    <div class="loading">Laster belønningene …</div>
+}
+else if (_purchases.Count == 0)
+{
+    <div class="empty-state"><h2>Ingen belønninger ennå</h2><p>Ta quiz, samle poeng og finn noe fint i butikken.</p><a class="button" href="/butikk">Åpne butikken</a></div>
+}
+else
+{
+    <div class="purchase-history">
+        @foreach (var purchase in _purchases)
+        {
+            <section class="purchase-card"><header><div><strong>Kjøp #@purchase.Id</strong><small>@purchase.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div><span class="point-price">@purchase.TotalPoints poeng</span></header><div class="purchased-lines">@foreach (var line in purchase.Lines) { <article><img src="@line.ImageUrl" alt="" /><div><strong>@line.ItemName</strong><small>@line.Quantity × @line.UnitPricePoints poeng</small></div></article> }</div></section>
+        }
+    </div>
+}
+
+@code {
+    private List<RewardPurchase>? _purchases;
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _purchases = await db.RewardPurchases.AsNoTracking().Include(x => x.Lines).Where(x => x.UserId == userId).OrderByDescending(x => x.CreatedAtUtc).ToListAsync();
+    }
+}

@@ -1,0 +1,79 @@
+@page "/butikk"
+@attribute [Authorize]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject RewardStoreService StoreService
+
+<PageTitle>Belønningsbutikk – LearnPlane</PageTitle>
+<section class="store-hero">
+    <div><div class="eyebrow">Bruk poengene dine</div><h1>Belønningsbutikken</h1><p>Poeng du tjener på quiz kan brukes på belønninger som er valgt av administrator.</p></div>
+    <div class="balance-card"><span>Din saldo</span><strong>@_balance</strong><small>poeng</small></div>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(_message)) { <div class="alert @(_success ? "success" : "error")">@_message</div> }
+
+@if (_items is null)
+{
+    <div class="loading">Åpner butikken …</div>
+}
+else if (_items.Count == 0)
+{
+    <div class="empty-state"><h2>Butikken er tom akkurat nå</h2><p>Kom tilbake senere for nye belønninger.</p></div>
+}
+else
+{
+    <div class="reward-grid">
+        @foreach (var item in _items)
+        {
+            <article class="reward-card">
+                <div class="reward-image"><img src="@item.ImageUrl" alt="" /></div>
+                <div class="reward-card-body">
+                    <h2>@item.Name</h2><p>@item.Description</p>
+                    <div class="reward-card-footer">
+                        <span class="point-price">@item.PricePoints poeng</span>
+                        <button class="button button-small" @onclick="() => AddAsync(item.Id)">Legg i kurv</button>
+                    </div>
+                </div>
+            </article>
+        }
+    </div>
+    <div class="floating-cart"><a class="button secondary" href="/handlekurv">Se handlekurven @(_cartCount > 0 ? $"({_cartCount})" : "") →</a></div>
+}
+
+@code {
+    private string _userId = string.Empty;
+    private List<RewardItem>? _items;
+    private int _balance;
+    private int _cartCount;
+    private string? _message;
+    private bool _success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _items = await db.RewardItems.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.PricePoints).ThenBy(x => x.Name).ToListAsync();
+        _cartCount = await db.CartItems.Where(x => x.UserId == _userId).SumAsync(x => (int?)x.Quantity) ?? 0;
+        _balance = await StoreService.GetBalanceAsync(_userId);
+    }
+
+    private async Task AddAsync(int itemId)
+    {
+        try
+        {
+            await StoreService.AddToCartAsync(_userId, itemId);
+            _success = true; _message = "Belønningen er lagt i handlekurven.";
+            await ReloadAsync();
+        }
+        catch (InvalidOperationException exception)
+        {
+            _success = false; _message = exception.Message;
+        }
+    }
+}

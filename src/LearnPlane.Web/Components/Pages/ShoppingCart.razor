@@ -1,0 +1,83 @@
+@page "/handlekurv"
+@attribute [Authorize]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject RewardStoreService StoreService
+
+<PageTitle>Handlekurv – LearnPlane</PageTitle>
+<div class="page-header"><div class="eyebrow">Belønningsbutikk</div><h1>Handlekurven din</h1><p>Kontroller belønningene før du bruker poengene dine.</p></div>
+
+@if (!string.IsNullOrWhiteSpace(_message)) { <div class="alert @(_success ? "success" : "error")">@_message</div> }
+
+@if (_loading)
+{
+    <div class="loading">Laster handlekurven …</div>
+}
+else if (_purchase is not null)
+{
+    <section class="result-card passed"><div class="result-icon">✓</div><div class="eyebrow">Kjøpet er gjennomført</div><h1>Belønning sikret!</h1><p>Du brukte @_purchase.TotalPoints poeng og har @_purchase.RemainingBalance poeng igjen.</p><div class="button-row"><a class="button" href="/mine-belønninger">Se mine belønninger</a><a class="button secondary" href="/butikk">Til butikken</a></div></section>
+}
+else if (_cart.Count == 0)
+{
+    <div class="empty-state"><h2>Handlekurven er tom</h2><p>Utforsk butikken og finn en belønning du liker.</p><a class="button" href="/butikk">Åpne butikken</a></div>
+}
+else
+{
+    <div class="cart-layout">
+        <section class="cart-list">
+            @foreach (var cartItem in _cart)
+            {
+                <article class="cart-row">
+                    <img src="@cartItem.RewardItem.ImageUrl" alt="" />
+                    <div><h2>@cartItem.RewardItem.Name</h2><p>@cartItem.RewardItem.Description</p>@if (!cartItem.RewardItem.IsActive) { <span class="status muted">Ikke tilgjengelig</span> }</div>
+                    <div class="quantity-control"><button aria-label="Reduser antall" @onclick="() => ChangeQuantityAsync(cartItem, -1)">−</button><strong>@cartItem.Quantity</strong><button aria-label="Øk antall" @onclick="() => ChangeQuantityAsync(cartItem, 1)">+</button></div>
+                    <strong class="line-total">@(cartItem.RewardItem.PricePoints * cartItem.Quantity) poeng</strong>
+                </article>
+            }
+        </section>
+        <aside class="cart-summary"><div class="eyebrow">Oppsummering</div><h2>@Total poeng</h2><p>Tilgjengelig saldo: <strong>@_balance poeng</strong></p>@if (_balance < Total) { <p class="insufficient">Du mangler @(Total - _balance) poeng.</p> }<button class="button" disabled="@_checkingOut" @onclick="CheckoutAsync">@(_checkingOut ? "Gjennomfører …" : "Kjøp belønninger")</button><a href="/butikk">← Handle videre</a></aside>
+    </div>
+}
+
+@code {
+    private string _userId = string.Empty;
+    private List<CartItem> _cart = [];
+    private int _balance;
+    private bool _loading = true;
+    private bool _checkingOut;
+    private string? _message;
+    private bool _success;
+    private CheckoutResult? _purchase;
+    private int Total => _cart.Sum(x => x.RewardItem.PricePoints * x.Quantity);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _cart = await db.CartItems.AsNoTracking().Include(x => x.RewardItem).Where(x => x.UserId == _userId).OrderBy(x => x.Id).ToListAsync();
+        _balance = await StoreService.GetBalanceAsync(_userId);
+        _loading = false;
+    }
+
+    private async Task ChangeQuantityAsync(CartItem item, int change)
+    {
+        await StoreService.SetQuantityAsync(_userId, item.Id, item.Quantity + change);
+        await ReloadAsync();
+    }
+
+    private async Task CheckoutAsync()
+    {
+        _checkingOut = true;
+        var result = await StoreService.CheckoutAsync(_userId);
+        _checkingOut = false;
+        _success = result.Success; _message = result.Message;
+        if (result.Success) _purchase = result;
+        else await ReloadAsync();
+    }
+}

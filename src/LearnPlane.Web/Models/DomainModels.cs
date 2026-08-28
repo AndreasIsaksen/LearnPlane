@@ -15,6 +15,8 @@ public sealed class ApplicationUser : IdentityUser
     public string DisplayName { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public ICollection<QuizAttempt> QuizAttempts { get; set; } = [];
+    public ICollection<CartItem> CartItems { get; set; } = [];
+    public ICollection<RewardPurchase> RewardPurchases { get; set; } = [];
 }
 
 public enum CourseDifficulty
@@ -73,4 +75,51 @@ public sealed class QuizAttempt
     public bool Passed { get; set; }
     public int PointsAwarded { get; set; }
     public DateTime CompletedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class RewardItem
+{
+    public int Id { get; set; }
+    [Required, MaxLength(140)] public string Name { get; set; } = string.Empty;
+    [Required, MaxLength(600)] public string Description { get; set; } = string.Empty;
+    [Required] public string ImageUrl { get; set; } = string.Empty;
+    [Range(1, 100_000)] public int PricePoints { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    public ICollection<CartItem> CartItems { get; set; } = [];
+}
+
+public sealed class CartItem
+{
+    public int Id { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public ApplicationUser User { get; set; } = null!;
+    public int RewardItemId { get; set; }
+    public RewardItem RewardItem { get; set; } = null!;
+    [Range(1, 99)] public int Quantity { get; set; } = 1;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class RewardPurchase
+{
+    public int Id { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public ApplicationUser User { get; set; } = null!;
+    public int TotalPoints { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public ICollection<RewardPurchaseLine> Lines { get; set; } = [];
+}
+
+public sealed class RewardPurchaseLine
+{
+    public int Id { get; set; }
+    public int RewardPurchaseId { get; set; }
+    public RewardPurchase Purchase { get; set; } = null!;
+    public int? RewardItemId { get; set; }
+    [MaxLength(140)] public string ItemName { get; set; } = string.Empty;
+    [MaxLength(600)] public string ItemDescription { get; set; } = string.Empty;
+    public string ImageUrl { get; set; } = string.Empty;
+    public int UnitPricePoints { get; set; }
+    public int Quantity { get; set; }
 }

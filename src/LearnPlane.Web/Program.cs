@@ -41,6 +41,8 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<QuizService>();
+builder.Services.AddScoped<RewardStoreService>();
+builder.Services.AddSingleton<PointBalanceCalculator>();
 builder.Services.AddSingleton<ScoreCalculator>();
 
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
@@ -76,7 +78,7 @@ app.MapPost("/account/login", async (
         return Results.LocalRedirect($"/logg-inn?feil={Uri.EscapeDataString("Ugyldig brukernavn eller passord.")}");
     }
 
-    return Results.LocalRedirect(IsLocalUrl(returnUrl) ? returnUrl! : "/");
+    return Results.LocalRedirect(IsLocalUrl(returnUrl) ? EncodeLocalUrl(returnUrl!) : "/");
 });
 
 app.MapPost("/account/register", async (
@@ -121,6 +123,12 @@ app.Run();
 
 static bool IsLocalUrl(string? url) =>
     !string.IsNullOrWhiteSpace(url) && url.StartsWith('/') && !url.StartsWith("//");
+
+static string EncodeLocalUrl(string url)
+{
+    var absoluteUrl = new Uri(new Uri("http://localhost"), url);
+    return absoluteUrl.PathAndQuery + absoluteUrl.Fragment;
+}
 
 static string TranslateIdentityError(string code) => code switch
 {

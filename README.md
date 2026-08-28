@@ -1,6 +1,6 @@
 # LearnPlane
 
-LearnPlane er en norskspråklig læringsplattform for elever fra 1. til 10. klasse. Løsningen er en Blazor Web App med PostgreSQL, innlogging, kurs, quiz, poeng, resultatliste og administrasjon.
+LearnPlane er en norskspråklig læringsplattform for elever fra 1. til 10. klasse. Løsningen er en Blazor Web App med PostgreSQL, innlogging, kurs, quiz, poeng, belønningsbutikk, resultatliste og administrasjon.
 
 ## Funksjoner
 
@@ -8,7 +8,10 @@ LearnPlane er en norskspråklig læringsplattform for elever fra 1. til 10. klas
 - To kurs med fire quizspørsmål per fag og trinn opprettes automatisk første gang appen starter.
 - Minst 70 % riktige svar gir bestått. Lett, middels og utfordrende quiz gir henholdsvis 10, 20 og 30 poeng.
 - Resultatlisten bruker beste resultat per kurs og viser aldri antall forsøk.
+- Elever kan bruke tilgjengelige quizpoeng på administratorstyrte belønninger gjennom en persistent handlekurv.
+- Kjøp lagres med historiske navn, bilder og priser, mens resultatlisten fortsatt viser opptjente poeng uavhengig av forbruk.
 - Administrator kan se alle gjennomføringer, endre brukeres visningsnavn og passord, og redigere kurs, læringstekst, spørsmål og svaralternativer.
+- Administrator kan opprette og redigere belønninger med rasterbilde, beskrivelse, aktiv status og pris i poeng, samt se de siste kjøpene.
 - Brukergrensesnitt og læringsinnhold er på norsk.
 
 ## Start med Docker Compose
@@ -28,7 +31,7 @@ Løsningen bruker nøyaktig to hovedcontainere:
 - `learnplane-webapp`: Blazor/.NET 10
 - `learnplane-database`: PostgreSQL 17 med persistent Docker-volum
 
-Databaseskjema, roller, kurs og administrator opprettes automatisk. Stopp med `docker compose down`. Database og innloggingsnøkler beholdes i Docker-volumer; `docker compose down -v` sletter også disse dataene permanent.
+Databaseskjema, roller, kurs, en eksempelbelønning og administrator opprettes automatisk. Belønningsskjemaet oppgraderes også automatisk for eksisterende installasjoner fra første versjon. Stopp med `docker compose down`. Database og innloggingsnøkler beholdes i Docker-volumer; `docker compose down -v` sletter også disse dataene permanent.
 
 ## Innlogging og sikkerhet
 
