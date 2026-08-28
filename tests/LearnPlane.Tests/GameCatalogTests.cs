@@ -33,9 +33,9 @@ public sealed class GameCatalogTests
         Assert.Equal(5, levels[1].Cards.Count(x => x.IsTarget));
         Assert.Equal(5, levels[2].Cards.Count(x => x.CorrectPosition is not null));
         Assert.All(levels, level => Assert.InRange(level.MaxPoints, 1, 20));
-        Assert.StartsWith("Fagoppdrag:", game.Title);
-        Assert.Contains("Tre ulike oppdrag", game.Intro);
-        Assert.Contains(levels[0].Cards, x => x.IsTarget && x.Text == "art");
+        Assert.StartsWith(grade <= 2 ? "Læringslek:" : "Fagoppdrag:", game.Title);
+        Assert.Contains(grade <= 2 ? "Lek deg gjennom" : "Tre ulike oppdrag", game.Intro);
+        Assert.Contains(levels[0].Cards, x => x.IsTarget && x.Text == (grade <= 2 ? "dyr" : "art"));
         Assert.All(levels[1].Cards, x => Assert.NotNull(x.PairKey));
         Assert.Equal(Enumerable.Range(1, 5), levels[2].Cards.Select(x => x.CorrectPosition!.Value));
     }

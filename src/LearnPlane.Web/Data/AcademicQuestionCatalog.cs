@@ -19,7 +19,7 @@ internal static class AcademicQuestionCatalog
         for (var index = 0; index < questions.Count; index++)
         {
             questions[index].SortOrder = index + 1;
-            questions[index].Text = $"{grade}. trinn · {subject}: {questions[index].Text}";
+            questions[index].Text = $"{grade}. trinn · {subject} · {topic.Name}: {questions[index].Text}";
         }
         return questions;
     }
@@ -203,6 +203,27 @@ internal static class AcademicQuestionCatalog
         var others = topics.Where(x => x != topic).ToArray();
         var offset = (grade + variant) % others.Length;
         AcademicTopic O(int index) => others[(offset + index) % others.Length];
+        AdaptedTopicText A(AcademicTopic value) => AgeAdaptedPedagogy.AdaptTopic(grade, subject, value);
+        IReadOnlyList<string> Terms(AcademicTopic value) => AgeAdaptedPedagogy.GetTerms(grade, subject, value);
+        var current = A(topic);
+        if (grade <= 2)
+        {
+            var youngSeeds = new[]
+            {
+                Q($"Hvilken forklaring passer best til «{topic.Name}»?", current.Core, A(O(0)).Core, A(O(1)).Core, A(O(2)).Core,
+                    $"Denne forklaringen sier det viktigste med korte ord: {current.Core}"),
+                Q($"Se for deg dette: {current.Example} Hva viser eksemplet?", current.Core, A(O(1)).Core, A(O(2)).Core, A(O(0)).Core,
+                    $"Vi bruker det vi ser i eksemplet til å finne hovedideen: {current.Core}"),
+                Q($"En elev trenger hjelp med «{topic.Name}». Hva er et godt råd?", current.Reminder,
+                    "Velg det lengste svaret uten å lese.", "Hopp over bildet og alle sporene.", "Gjett på nytt uten å prøve noe.",
+                    $"Et godt råd hjelper eleven å se, prøve eller forklare: {current.Reminder}"),
+                Q($"Hvilke ord hører til «{topic.Name}»?", string.Join(" og ", Terms(topic).Take(2)),
+                    string.Join(" og ", Terms(O(0)).Take(2)), string.Join(" og ", Terms(O(1)).Take(2)),
+                    string.Join(" og ", Terms(O(2)).Take(2)),
+                    $"{Terms(topic)[0]} og {Terms(topic)[1]} er to ord vi øver på i dette kurset.")
+            };
+            return MakeQuestions(youngSeeds, grade, variant);
+        }
         var prompts = new[]
         {
             $"Hvilken forklaring av «{topic.Name.ToLowerInvariant()}» er faglig mest presis?",
@@ -219,10 +240,10 @@ internal static class AcademicQuestionCatalog
         };
         var seeds = new[]
         {
-            Q(prompts[(grade + variant) % prompts.Length], topic.Core, O(0).Core, O(1).Core, O(2).Core,
-                $"Kjerneideen er: {topic.Core}"),
-            Q(examplePrompts[(grade + variant * 2) % examplePrompts.Length], topic.Core, O(1).Core, O(2).Core, O(0).Core,
-                $"Opplysningene i eksemplet anvender nettopp denne sammenhengen: {topic.Core}"),
+            Q(prompts[(grade + variant) % prompts.Length], current.Core, A(O(0)).Core, A(O(1)).Core, A(O(2)).Core,
+                $"Kjerneideen er: {current.Core}"),
+            Q(examplePrompts[(grade + variant * 2) % examplePrompts.Length], current.Core, A(O(1)).Core, A(O(2)).Core, A(O(0)).Core,
+                $"Opplysningene i eksemplet anvender nettopp denne sammenhengen: {current.Core}"),
             Q($"En medelev hevder: «{topic.Misconception}» Hvilken respons retter misforståelsen best?",
                 $"Påstanden må korrigeres: {topic.Core}", $"Påstanden er alltid riktig uten forbehold.", O(0).Core, O(1).Core,
                 $"Den faglige korrigeringen bygger på kjerneideen: {topic.Core}"),
@@ -240,6 +261,36 @@ internal static class AcademicQuestionCatalog
         var others = topics.Where(x => x != topic).ToArray();
         var offset = (grade * 2 + variant) % others.Length;
         AcademicTopic O(int index) => others[(offset + index) % others.Length];
+        AdaptedTopicText A(AcademicTopic value) => AgeAdaptedPedagogy.AdaptTopic(grade, subject, value);
+        IReadOnlyList<string> Terms(AcademicTopic value) => AgeAdaptedPedagogy.GetTerms(grade, subject, value);
+        var current = A(topic);
+        if (grade <= 2)
+        {
+            var youngSeeds = new[]
+            {
+                Q($"Hvilket ordpar passer til «{topic.Name}»?", $"{Terms(topic)[0]} og {Terms(topic)[1]}",
+                    $"{Terms(O(0))[0]} og {Terms(O(0))[1]}", $"{Terms(O(1))[0]} og {Terms(O(1))[1]}",
+                    $"{Terms(O(2))[0]} og {Terms(O(2))[1]}", "Begge ordene brukes i tegningen og forklaringen i kurset."),
+                Q($"Hvilket eksempel passer til «{topic.Name}»?", current.Example, A(O(0)).Example, A(O(1)).Example, A(O(2)).Example,
+                    $"Eksemplet viser dette: {current.Core}"),
+                Q($"Hva kan du gjøre for å vise ordet «{Terms(topic)[0]}»?",
+                    "Bruke en ting, bevegelse eller tegning og fortelle hva den viser.", "Skjule alt og ikke forklare.",
+                    "Velge et tilfeldig ord fra et annet fag.", "Si at ordet betyr alt på én gang.",
+                    "Når du viser og forklarer, kobler du fagordet til noe konkret."),
+                Q("Hva er lurt når noe er vanskelig å forstå?", "Stoppe, se på modellen og forklare én liten del.",
+                    "Lese fortere uten å stoppe.", "Gjette uten å se på oppgaven.", "Hoppe over alle bilder og eksempler.",
+                    "En liten del, en tegning eller noen konkrete ting kan gjøre sammenhengen tydelig."),
+                Q($"Du har brukt ordet «{Terms(topic)[1]}». Hva gjør forklaringen bedre?",
+                    "Å si hva ordet viser i akkurat dette eksemplet.", "Å gjenta ordet mange ganger uten eksempel.",
+                    "Å bytte til et helt annet tema.", "Å fjerne tegningen før noen får se den.",
+                    "Et fagord blir nyttig når det kobles til noe vi kan se eller vise."),
+                Q($"Hvordan viser du at du har lært noe om «{topic.Name}»?",
+                    "Jeg lager et nytt eksempel og forteller hvordan det passer.", "Jeg kopierer uten å se på meningen.",
+                    "Jeg velger alltid det første svaret.", "Jeg bruker ingen av ordene vi har øvd på.",
+                    "Et eget eksempel viser at du kan bruke det du har lært i en ny situasjon.")
+            };
+            return MakeQuestions(youngSeeds, grade, variant + 4);
+        }
         var seeds = new[]
         {
             Q($"Hvilket begrepspar hører mest direkte til «{topic.Name}»?",
@@ -279,9 +330,15 @@ internal static class AcademicQuestionCatalog
 
     private static ICollection<QuizQuestion> MakeQuestions(IEnumerable<QuestionSeed> seeds, int grade, int variant)
     {
-        var openings = new[] { "Løs oppgaven:", "Tenk faglig:", "Bruk det du har lært:", "Vis forståelse:" };
+        var openings = grade switch
+        {
+            <= 2 => new[] { "Se og tenk:", "Prøv denne:", "Hva passer?", "Tenk på tegningen:" },
+            <= 4 => new[] { "Tenk etter:", "Bruk modellen:", "Finn sammenhengen:", "Prøv med fagord:" },
+            <= 7 => new[] { "Løs oppgaven:", "Tenk faglig:", "Bruk det du har lært:", "Vis forståelse:" },
+            _ => new[] { "Analyser:", "Vurder dokumentasjonen:", "Bruk faglig presisjon:", "Begrunn konklusjonen:" }
+        };
         return seeds.Select((seed, index) => Question(index + 1,
-            seed with { Text = $"{openings[index % openings.Length]} {seed.Text} Oppgaven er tilpasset {grade}. trinn." },
+            seed with { Text = $"{openings[index % openings.Length]} {seed.Text}" },
             (grade + variant + index) % 4)).ToList();
     }
 

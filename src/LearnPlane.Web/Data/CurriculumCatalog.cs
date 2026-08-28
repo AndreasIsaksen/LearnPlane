@@ -12,7 +12,7 @@ public sealed record GameVocabulary(string Intro, IReadOnlyList<string> Targets,
 
 public static class CurriculumCatalog
 {
-    public const string ContentVersion = "academic-v3";
+    public const string ContentVersion = "academic-v4";
 
     private static AcademicTopic T(string name, string core, string explanation, string example,
         string misconception, params string[] terms) => new(name, core, explanation, example, misconception, terms);
@@ -189,35 +189,43 @@ public static class CurriculumCatalog
     {
         var topics = Topics.GetValueOrDefault(course.Subject, Topics["Norsk"]);
         var topic = topics.FirstOrDefault(x => x.Name == course.Title) ?? topics[0];
+        var pedagogy = AgeAdaptedPedagogy.Create(course.Grade, course.Subject, topic, Methods[course.Subject]);
+        var adaptedTerms = AgeAdaptedPedagogy.GetTerms(course.Grade, course.Subject, topic);
         var distractors = topics.Where(x => x != topic).SelectMany(x => x.Terms).Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(x => !topic.Terms.Contains(x, StringComparer.OrdinalIgnoreCase)).ToArray();
+        var pairLabels = course.Grade <= 2
+            ? new[] { "Dette lærer vi", "Slik virker det", "Se dette", "Pass på", "Slik kan du prøve" }
+            : course.Grade <= 4
+                ? new[] { "Hovedidé", "Forklaring", "Eksempel", "Viktig å huske", "Arbeidsmåte" }
+                : new[] { "Kjerneidé", "Faglig forklaring", "Gjennomarbeidet eksempel", "Vanlig misforståelse", "Nyttig arbeidsmåte" };
         var pairs = new[]
         {
-            new GamePair("Kjerneidé", topic.Core),
-            new GamePair("Faglig forklaring", topic.Explanation),
-            new GamePair("Gjennomarbeidet eksempel", topic.Example),
-            new GamePair("Vanlig misforståelse", topic.Misconception),
-            new GamePair("Nyttig arbeidsmåte", Methods[course.Subject])
+            new GamePair(pairLabels[0], pedagogy.Topic.Core),
+            new GamePair(pairLabels[1], pedagogy.Topic.Explanation),
+            new GamePair(pairLabels[2], pedagogy.Topic.Example),
+            new GamePair(pairLabels[3], pedagogy.Topic.Reminder),
+            new GamePair(pairLabels[4], pedagogy.Method)
         };
-        var sequence = new[]
-        {
-            $"Avklar hva oppgaven om {topic.Name.ToLowerInvariant()} spør etter.",
-            $"Velg relevante begreper, for eksempel {topic.Terms[0]} og {topic.Terms[1]}.",
-            "Bruk den faglige metoden og vis viktige mellomsteg eller observasjoner.",
-            $"Koble resultatet tilbake til kjerneideen: {topic.Core}",
-            "Kontroller resonnementet, vurder en mulig feil og formuler konklusjonen presist."
-        };
-        return new($"Tre ulike oppdrag trener «{topic.Name}»: sorter kort, koble sammen forklaringer og bygg et faglig puslespill i riktig rekkefølge.",
-            topic.Terms, distractors, pairs, sequence);
+        string[] sequence = course.Grade <= 2
+            ? new[] { "Se eller lytt.", "Finn det viktigste.", "Prøv med ting, bilde eller bevegelse.", "Tegn eller vis hva som skjedde.", "Fortell og sjekk sammen med noen." }
+            : [.. pedagogy.Steps, course.Grade <= 4 ? "Forbedre forklaringen etter kontrollen." : "Vurder en mulig feil eller innvending og presiser konklusjonen."];
+        var intro = course.Grade <= 2
+            ? $"Lek deg gjennom «{topic.Name}»: finn riktige kort, koble bilde og forklaring, og bygg stegene i riktig rekkefølge."
+            : course.Grade <= 4
+                ? $"Tre spill lar deg sortere, koble og bygge en modell av «{topic.Name}»."
+                : $"Tre ulike oppdrag trener «{topic.Name}»: sorter kort, koble sammen forklaringer og bygg et faglig puslespill i riktig rekkefølge.";
+        return new(intro,
+            adaptedTerms, distractors, pairs, sequence);
     }
 
     private static Course BuildCourse(int grade, string subject, AcademicTopic topic, AcademicTopic[] topics,
         CourseDifficulty difficulty, int sortOrder)
     {
+        var pedagogy = AgeAdaptedPedagogy.Create(grade, subject, topic, Methods[subject]);
         var course = new Course
         {
             Grade = grade, Subject = subject, Title = topic.Name,
-            Summary = $"Fordyp deg i {topic.Name.ToLowerInvariant()} med faglig forklaring, eksempel, arbeidsmåte og utfordring tilpasset {grade}. trinn.",
+            Summary = pedagogy.Summary,
             Content = BuildContent(grade, subject, topic), CatalogVersion = ContentVersion,
             Difficulty = difficulty, SortOrder = sortOrder, IsPublished = true
         };
@@ -227,27 +235,27 @@ public static class CurriculumCatalog
 
     private static string BuildContent(int grade, string subject, AcademicTopic topic)
     {
-        var (studyAdvice, challenge) = grade switch
-        {
-            <= 2 => ("Bruk tegning, konkreter og muntlig forklaring. Les gjerne sammen med en voksen eller medelev.", "Lag eller finn ett nytt eksempel. Tegn det og forklar med to egne setninger hva det viser."),
-            <= 4 => ("Stopp etter hvert avsnitt, forklar nøkkelordene og lag et nytt eksempel før du går videre.", "Lag ett eksempel som passer og ett som ikke passer. Forklar detaljen som skiller dem."),
-            <= 7 => ("Noter årsaker, virkninger og fagbegreper. Kontroller din forklaring mot eksemplet.", "Bruk arbeidsmåten på en ny situasjon og begrunn med minst tre nøkkelbegreper."),
-            _ => ("Vurder forutsetninger, dokumentasjon og alternative forklaringer. Begrunn alle viktige valg.", "Analyser en ny situasjon, vis resonnementet og vurder en innvending og hvordan konklusjonen kan kontrolleres.")
-        };
-        var terms = string.Join("", topic.Terms.Take(6).Select(x => $"<li>{E(x)}</li>"));
+        var pedagogy = AgeAdaptedPedagogy.Create(grade, subject, topic, Methods[subject]);
+        var adaptedTerms = AgeAdaptedPedagogy.GetTerms(grade, subject, topic);
+        var terms = string.Join("", adaptedTerms.Take(pedagogy.TermCount).Select((x, index) =>
+            $"<li>{(grade <= 2 ? $"<span aria-hidden=\"true\">{new[] { "●", "▲", "■", "◆", "★" }[index % 5]}</span>" : string.Empty)}{E(x)}</li>"));
+        var steps = string.Join("", pedagogy.Steps.Select(x => $"<li>{E(x)}</li>"));
+        var coreLabel = grade <= 2 ? "Husk dette:" : grade <= 4 ? "Hovedidé:" : "Kjerneidé:";
+        var reminderLabel = grade <= 2 ? "Husk:" : "Pass på:";
         return $"""
-            <div data-content-version="{ContentVersion}">
+            <div data-content-version="{ContentVersion}" data-grade-band="{(grade <= 2 ? "early" : grade <= 4 ? "primary" : grade <= 7 ? "middle" : "secondary")}">
             <h2>1. Dette skal du lære</h2>
-            <p>Etter kapitlet skal du kunne forklare hovedideen, bruke fagbegrepene presist, anvende en relevant arbeidsmåte og begrunne et svar på nivå med {grade}. trinn.</p>
-            <div class="fact-box"><strong>Kjerneidé:</strong> {E(topic.Core)}</div>
-            <h2>2. Faglig forklaring</h2><p>{E(topic.Explanation)}</p><p>{E(studyAdvice)}</p>
-            <h3>Nøkkelbegreper</h3><ul class="term-list">{terms}</ul>
-            <h2>3. Gjennomarbeidet eksempel</h2><p>{E(topic.Example)}</p>
-            <p><strong>Hvorfor eksemplet virker:</strong> Det kobler en konkret situasjon til kjerneideen og viser hvilke opplysninger eller begreper som bærer forklaringen.</p>
-            <h2>4. Slik arbeider du faglig</h2><p>{E(Methods[subject])}</p>
-            <ol><li>Marker hva du vet og hva du skal finne eller forklare.</li><li>Velg begreper og metode som passer formålet.</li><li>Vis mellomsteg, observasjoner eller tekstbevis.</li><li>Kontroller resultatet og tolk det i den opprinnelige situasjonen.</li></ol>
-            <h2>5. Vanlig misforståelse</h2><div class="misconception-box"><strong>Pass på:</strong> {E(topic.Misconception)}</div>
-            <h2>6. Din utfordring</h2><p>{E(challenge)}</p><p>Gi eller få respons på om fagbegrepene er brukt presist, og forbedre forklaringen før quizen.</p>
+            <p>{E(pedagogy.Goal)}</p>
+            <div class="fact-box"><strong>{coreLabel}</strong> {E(pedagogy.Topic.Core)}</div>
+            <h2>2. {pedagogy.ExplanationHeading}</h2><p>{E(pedagogy.Topic.Explanation)}</p><p>{E(pedagogy.StudyAdvice)}</p>
+            {pedagogy.VisualHtml}
+            <h3>{(grade <= 2 ? "Ord vi øver på" : "Nøkkelbegreper")}</h3><ul class="term-list">{terms}</ul>
+            <h2>3. {pedagogy.ExampleHeading}</h2><p>{E(pedagogy.Topic.Example)}</p>
+            <p><strong>{(grade <= 2 ? "Hva ser vi?" : "Hvorfor eksemplet virker:")}</strong> {(grade <= 2 ? "Eksemplet viser hovedideen med noe du kan se, gjøre eller kjenne igjen." : "Det kobler en konkret situasjon til hovedideen og viser hvilke opplysninger eller begreper som bærer forklaringen.")}</p>
+            <h2>4. {pedagogy.MethodHeading}</h2><p>{E(pedagogy.Method)}</p>
+            <ol class="learning-steps">{steps}</ol>
+            <h2>5. {(grade <= 2 ? "Noe det er lett å blande" : "Vanlig misforståelse")}</h2><div class="misconception-box"><strong>{reminderLabel}</strong> {E(pedagogy.Topic.Reminder)}</div>
+            <h2>6. Din utfordring</h2><p>{E(pedagogy.Challenge)}</p><p>{E(pedagogy.ResponsePrompt)}</p>
             <p class="source-note">Faglig retning: <a href="{CurriculumUrls[subject]}" target="_blank" rel="noopener">LK20-læreplanen i {E(subject)}</a>. Innholdet er et læringssupplement og erstatter ikke lærerens vurdering eller skolens lokale plan.</p>
             </div>
             """;

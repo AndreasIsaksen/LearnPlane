@@ -79,7 +79,7 @@ else if (_game is not null && CurrentLevel is not null)
         {
             <div class="alert info">Du går normalt i @_game.CurrentGrade. klasse. Du kan fullføre spillet, men lavere trinn gir ikke poeng.</div>
         }
-        <div class="penalty-note"><span>⏱</span><span>Tre mislykkede spillforsøk innen 30 minutter låser bare dette spillet i 30 minutter.</span></div>
+        <div class="penalty-note"><span>⏱</span><span>@PenaltyText</span></div>
     </header>
 
     <nav class="level-track" aria-label="Spillnivåer">
@@ -186,7 +186,7 @@ else if (_game is not null && CurrentLevel is not null)
 
         @if (!string.IsNullOrWhiteSpace(_error)) { <div class="alert error">@_error</div> }
         <div class="game-actions">
-            <span>70 % gir ¾ av poengene. 100 % sikrer resten.</span>
+            <span>@PointsHelp</span>
             <button class="button game-button" disabled="@(!ReadyToSubmit || _submitting)" @onclick="SubmitAsync">
                 @(_submitting ? "Sjekker …" : "Fullfør oppdraget")
             </button>
@@ -207,6 +207,13 @@ else if (_game is not null && CurrentLevel is not null)
     private int _levelId;
     private bool _submitting;
     private bool _notFound;
+    private bool IsEarlyGrade => _game is { Grade: <= 2 };
+    private string PenaltyText => IsEarlyGrade
+        ? "Etter tre runder med under 70 % tar bare denne læringsleken en pause på 30 minutter."
+        : "Tre mislykkede spillforsøk innen 30 minutter låser bare dette spillet i 30 minutter.";
+    private string PointsHelp => IsEarlyGrade
+        ? "Når 7 av 10 deler er riktige, får du poeng. Alt riktig gir hele poengpotten."
+        : "70 % gir ¾ av poengene. 100 % sikrer resten.";
     private GameLevelView? CurrentLevel => _game?.Levels.SingleOrDefault(x => x.Id == _levelId);
     private int ProgressCount => CurrentLevel?.Mode switch
     {

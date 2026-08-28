@@ -68,7 +68,7 @@ else if (_lockout.IsLocked)
 else
 {
     <PageTitle>Quiz: @_course.Title – LearnPlane</PageTitle>
-    <div class="quiz-header"><div class="eyebrow">@_course.Subject · @_course.Grade. klasse</div><h1>@_course.Title</h1><p>Velg ett svar på hvert av @_questionOrder.Count spørsmål. Rekkefølgen på både spørsmål og svar stokkes for hvert forsøk. 70 % gir bestått og ¾ av poengene; 100 % gir hele potten.</p><div class="penalty-note"><span>⏱</span><span>Tre mislykkede forsøk innen 30 minutter låser bare denne quizen i 30 minutter.</span></div></div>
+    <div class="quiz-header"><div class="eyebrow">@_course.Subject · @_course.Grade. klasse</div><h1>@_course.Title</h1><p>@QuizInstructions</p><div class="penalty-note"><span>⏱</span><span>@PenaltyText</span></div></div>
     <div class="quiz-questions">
         @for (var index = 0; index < _questionOrder.Count; index++)
         {
@@ -88,7 +88,7 @@ else
         }
     </div>
     @if (!string.IsNullOrWhiteSpace(_error)) { <div class="alert error">@_error</div> }
-    <button class="button submit-quiz" disabled="@_submitting" @onclick="SubmitAsync">@(_submitting ? "Retter …" : "Lever svar")</button>
+    <button class="button submit-quiz" disabled="@_submitting" @onclick="SubmitAsync">@(_submitting ? "Ser på svarene …" : SubmitLabel)</button>
 }
 
 @code {
@@ -102,6 +102,16 @@ else
     private string? _userId;
     private string? _error;
     private bool _submitting;
+    private bool IsEarlyGrade => _course is { Grade: <= 2 };
+    private string QuizInstructions => IsEarlyGrade
+        ? $"Velg ett svar på hvert av de {_questionOrder.Count} spørsmålene. Tenk på bildene, tingene du prøvde og ordene du øvde på. Spørsmål og svar får ny rekkefølge neste gang."
+        : _course is { Grade: <= 4 }
+            ? $"Svar på {_questionOrder.Count} spørsmål. Bruk modellene, eksemplene og fagordene. Spørsmål og svar stokkes for hvert forsøk."
+            : $"Velg ett svar på hvert av {_questionOrder.Count} spørsmål. Rekkefølgen på både spørsmål og svar stokkes for hvert forsøk. 70 % gir bestått og ¾ av poengene; 100 % gir hele potten.";
+    private string PenaltyText => IsEarlyGrade
+        ? "Etter tre runder med under 70 % tar denne kunnskapsleken en pause på 30 minutter. Du kan fortsatt lære og spille andre steder."
+        : "Tre mislykkede forsøk innen 30 minutter låser bare denne quizen i 30 minutter.";
+    private string SubmitLabel => IsEarlyGrade ? "Se hvordan det gikk" : "Lever svar";
 
     protected override async Task OnParametersSetAsync()
     {

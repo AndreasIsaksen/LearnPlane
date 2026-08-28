@@ -38,7 +38,9 @@ public static class GameCatalog
             _ => new[] { 8, 14, 20 }
         };
         var titles = course.Grade <= 3
-            ? new[] { "Kortskogen", "Koble kompisene", "Puslemesteren" }
+            ? course.Grade == 1
+                ? new[] { "Finn bildekortene", "Finn parene", "Bygg læringsstien" }
+                : new[] { "Kortskogen", "Koble kompisene", "Puslemesteren" }
             : course.Grade <= 7
                 ? new[] { "Kortjakten", "Koblingskartet", "Fagpuslespillet" }
                 : new[] { "Fagduellen", "Sammenhengslabben", "Analysepuslespillet" };
@@ -71,26 +73,32 @@ public static class GameCatalog
         return new CourseGame
         {
             Course = course,
-            Title = $"Fagoppdrag: {course.Title}",
+            Title = course.Grade <= 2 ? $"Læringslek: {course.Title}" : $"Fagoppdrag: {course.Title}",
             Intro = vocabulary.Intro,
             Levels =
             [
                 new GameLevel
                 {
                     LevelNumber = 1, Mode = GameLevelMode.CardSort, Title = titles[0], MaxPoints = points[0],
-                    Instructions = $"Finn de tre kortene som hører direkte til «{course.Title}». Symbolene er bare dekorasjon – bruk fagkunnskapen.",
+                    Instructions = course.Grade <= 2
+                        ? $"Finn tre ord som passer til «{course.Title}». Si ordet høyt og tenk på tegningen fra kurset."
+                        : $"Finn de tre kortene som hører direkte til «{course.Title}». Symbolene er bare dekorasjon – bruk fagkunnskapen.",
                     Cards = sortCards
                 },
                 new GameLevel
                 {
                     LevelNumber = 2, Mode = GameLevelMode.Matching, Title = titles[1], MaxPoints = points[1],
-                    Instructions = "Koble hver etikett til riktig forklaring. Velg først et kort til venstre og deretter svaret til høyre; linjene viser koblingene dine.",
+                    Instructions = course.Grade <= 2
+                        ? "Finn par som hører sammen. Trykk først på et kort til venstre, og så på forklaringen til høyre."
+                        : "Koble hver etikett til riktig forklaring. Velg først et kort til venstre og deretter svaret til høyre; linjene viser koblingene dine.",
                     Cards = matchingCards
                 },
                 new GameLevel
                 {
                     LevelNumber = 3, Mode = GameLevelMode.Jigsaw, Title = titles[2], MaxPoints = points[2],
-                    Instructions = "Bygg det faglige puslespillet: trykk brikkene i den rekkefølgen en grundig problemløser bør arbeide.",
+                    Instructions = course.Grade <= 2
+                        ? "Bygg læringsstien. Legg brikkene i den rekkefølgen du vil gjøre dem: se, prøve, tegne og fortelle."
+                        : "Bygg det faglige puslespillet: trykk brikkene i den rekkefølgen en grundig problemløser bør arbeide.",
                     Cards = jigsawCards
                 }
             ]

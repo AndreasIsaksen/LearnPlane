@@ -26,11 +26,58 @@ public sealed class CurriculumCatalogTests
             Assert.Equal(CurriculumCatalog.ContentVersion, course.CatalogVersion);
             Assert.True(course.Content.Length >= 1_500, $"{course.Grade}. {course.Subject}/{course.Title} er for kort.");
             Assert.Equal(6, Count(course.Content, "<h2>"));
-            Assert.Contains("Gjennomarbeidet eksempel", course.Content);
-            Assert.Contains("Vanlig misforståelse", course.Content);
+            Assert.Contains("data-grade-band=", course.Content);
+            Assert.Contains("data-visual-level=", course.Content);
+            Assert.Contains("data-visual-aid=", course.Content);
             Assert.Contains("LK20", course.Content);
             Assert.True(course.Summary.Length <= 350);
         });
+    }
+
+    [Fact]
+    public void VisualSupportAndLanguageProgressWithGradeLevel()
+    {
+        Assert.All(_courses, course =>
+        {
+            var expectedVisualLevel = course.Grade == 1 ? 4 : course.Grade == 2 ? 3 : course.Grade <= 4 ? 2 : 1;
+            var expectedAidCount = course.Grade <= 2 ? 3 : course.Grade <= 4 ? 2 : 1;
+            Assert.Contains($"data-visual-level=\"{expectedVisualLevel}\"", course.Content);
+            Assert.Equal(expectedAidCount, Count(course.Content, "data-visual-aid="));
+            Assert.Contains("role=\"img\"", course.Content);
+            Assert.Contains("<title", course.Content);
+        });
+
+        var firstGrade = _courses.Where(x => x.Grade == 1).ToList();
+        Assert.All(firstGrade, course =>
+        {
+            Assert.Contains("Se det for deg", course.Content);
+            Assert.Contains("Tegn", course.Content, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("etterprøvbarhet", course.Content, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("premisser", course.Content, StringComparison.OrdinalIgnoreCase);
+        });
+
+        var secondary = _courses.Where(x => x.Grade >= 8).ToList();
+        Assert.All(secondary, course =>
+        {
+            Assert.Contains("dokumentasjon", course.Content, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("premiss", course.Content, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("motargument", course.Content, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public void EarlyGradeQuestionsUseConcretePromptsAndAccessibleTerms()
+    {
+        var earlyQuestions = _courses.Where(x => x.Grade <= 2).SelectMany(x => x.Questions).ToList();
+        Assert.Contains(earlyQuestions, x => x.Text.Contains("Se og tenk:"));
+        Assert.Contains(earlyQuestions, x => x.Text.Contains("Tenk på tegningen:"));
+        Assert.DoesNotContain(earlyQuestions, x => x.Text.Contains("Analyser:"));
+        Assert.DoesNotContain(earlyQuestions, x => x.Text.Contains("faglig holdbare", StringComparison.OrdinalIgnoreCase));
+
+        var firstGradeMath = _courses.Single(x => x.Grade == 1 && x.Subject == "Matematikk" && x.Title == "Tall og regning");
+        Assert.Contains("tall", firstGradeMath.Content);
+        Assert.Contains("telle", firstGradeMath.Content);
+        Assert.DoesNotContain("plassverdisystemet", firstGradeMath.Content, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -79,7 +126,7 @@ public sealed class CurriculumCatalogTests
         Assert.All(_courses, course =>
         {
             var game = GameCatalog.CreateGame(course);
-            Assert.StartsWith("Fagoppdrag:", game.Title);
+            Assert.StartsWith(course.Grade <= 2 ? "Læringslek:" : "Fagoppdrag:", game.Title);
             Assert.Contains(course.Title, game.Title);
             Assert.Equal(3, game.Levels.Count);
             Assert.Equal(new[] { 6, 10, 5 }, game.Levels.OrderBy(x => x.LevelNumber).Select(x => x.Cards.Count));
