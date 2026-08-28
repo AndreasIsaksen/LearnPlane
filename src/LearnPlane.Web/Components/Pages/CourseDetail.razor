@@ -17,12 +17,12 @@ else
         <p class="lead">@_course.Summary</p>
         <div class="lesson-content">@((MarkupString)_course.Content)</div>
         <div class="quiz-callout">
-            <div><div class="eyebrow">Klar for å teste deg?</div><h2>Ta quizen</h2><p>Du må ha minst 70 % riktig for å bestå.</p></div>
-            <a class="button" href="@($"/kurs/{_course.Id}/quiz")">Start quiz · @((int)_course.Difficulty * 10) poeng</a>
+            <div><div class="eyebrow">@QuizEyebrow</div><h2>@QuizTitle</h2><p>@QuizDescription</p></div>
+            <a class="button" href="@($"/kurs/{_course.Id}/quiz")">@QuizButton · @((int)_course.Difficulty * 10) poeng</a>
         </div>
         <div class="game-callout">
-            <div><div class="eyebrow">Lær med fart og fagblikk</div><h2>Spill fagoppdraget</h2><p>Sorter emnets egne begreper gjennom tre nivåer med stadig mer relevante feller og opptil @GamePoints poeng.</p></div>
-            <a class="button game-button" href="@($"/kurs/{_course.Id}/spill")">Start spillet</a>
+            <div><div class="eyebrow">@GameEyebrow</div><h2>@GameTitle</h2><p>@GameDescription</p></div>
+            <a class="button game-button" href="@($"/kurs/{_course.Id}/spill")">@GameButton</a>
         </div>
     </article>
 }
@@ -30,6 +30,19 @@ else
 @code {
     [Parameter] public int Id { get; set; }
     private Course? _course;
+    private bool IsEarlyGrade => _course?.Grade <= 2;
+    private string QuizEyebrow => IsEarlyGrade ? "Klar for å vise hva du har sett?" : _course?.Grade <= 4 ? "Klar for å bruke modellen?" : "Klar for å teste forståelsen?";
+    private string QuizTitle => IsEarlyGrade ? "Liten kunnskapslek" : "Ta quizen";
+    private string QuizDescription => IsEarlyGrade
+        ? "Se på ett spørsmål om gangen. Tenk på tegningene og be gjerne en voksen lese sammen med deg."
+        : _course?.Grade <= 4 ? "Bruk eksemplene og fagordene. 70 % riktig gir bestått." : "Du må ha minst 70 % riktig for å bestå.";
+    private string QuizButton => IsEarlyGrade ? "Start spørsmålene" : "Start quiz";
+    private string GameEyebrow => IsEarlyGrade ? "Se, koble og bygg" : "Lær gjennom aktivitet";
+    private string GameTitle => IsEarlyGrade ? "Spill læringsleken" : "Spill fagoppdraget";
+    private string GameDescription => IsEarlyGrade
+        ? $"Finn ord, koble par og bygg en læringssti gjennom tre små nivåer. Du kan få opptil {GamePoints} poeng."
+        : $"Sorter, koble og bygg faglige sammenhenger gjennom tre nivåer med opptil {GamePoints} poeng.";
+    private string GameButton => IsEarlyGrade ? "Start læringsleken" : "Start spillet";
     private int GamePoints => _course?.Difficulty switch
     {
         CourseDifficulty.Lett => 18,
