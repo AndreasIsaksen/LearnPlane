@@ -122,6 +122,7 @@ app.MapPost("/account/logout", async (SignInManager<ApplicationUser> signInManag
 });
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 await DatabaseInitializer.InitializeAsync(app.Services, app.Configuration);
