@@ -21,6 +21,28 @@ else if (_result is not null)
         else if (_result.Score.Passed) { <p>Du har allerede fått alle poengene som dette resultatet kan gi. Få 100 % for å sikre hele potten på @_result.MaxPoints poeng.</p> }
         <div class="button-row"><button class="button secondary" @onclick="TryAgain">Prøv igjen</button><a class="button" href="@($"/kurs/{Id}")">Til kurset</a></div>
     </section>
+    <section class="quiz-review" aria-labelledby="quiz-review-title">
+        <div class="eyebrow">Lær av svarene</div>
+        <h2 id="quiz-review-title">Faglig gjennomgang</h2>
+        <p>Se hvorfor svaret er riktig før du prøver på nytt eller går videre.</p>
+        @foreach (var question in _course.Questions.OrderBy(x => x.SortOrder))
+        {
+            var selectedId = _answers.GetValueOrDefault(question.Id);
+            var selected = question.Options.Single(x => x.Id == selectedId);
+            var correct = question.Options.Single(x => x.IsCorrect);
+            var answeredCorrectly = selected.Id == correct.Id;
+            <article class="review-item @(answeredCorrectly ? "correct" : "incorrect")">
+                <h3><span>@(answeredCorrectly ? "✓" : "→")</span> Spørsmål @question.SortOrder</h3>
+                <p class="review-question">@question.Text</p>
+                <p><strong>Ditt svar:</strong> @selected.Text</p>
+                @if (!answeredCorrectly)
+                {
+                    <p><strong>Riktig svar:</strong> @correct.Text</p>
+                }
+                <p class="review-explanation"><strong>Forklaring:</strong> @question.Explanation</p>
+            </article>
+        }
+    </section>
 }
 else
 {

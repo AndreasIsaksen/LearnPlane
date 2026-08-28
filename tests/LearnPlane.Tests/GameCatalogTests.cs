@@ -30,5 +30,9 @@ public sealed class GameCatalogTests
         Assert.Equal([6, 10, 14], levels.Select(x => x.Cards.Count));
         Assert.All(levels, level => Assert.Equal(level.Cards.Count / 2, level.Cards.Count(x => x.IsTarget)));
         Assert.All(levels, level => Assert.InRange(level.MaxPoints, 1, 20));
+        Assert.StartsWith("Fagoppdrag:", game.Title);
+        Assert.Contains("samme fag", game.Intro);
+        Assert.Contains(levels[0].Cards, x => x.IsTarget && x.Text == "art");
+        Assert.Contains(levels[1].Cards, x => !x.IsTarget && x.Text is "problemstilling" or "partikkel" or "vær" or "celle");
     }
 }

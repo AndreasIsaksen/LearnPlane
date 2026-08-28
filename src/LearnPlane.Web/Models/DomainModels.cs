@@ -36,6 +36,7 @@ public sealed class Course
     [MaxLength(160)] public string Title { get; set; } = string.Empty;
     [MaxLength(350)] public string Summary { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
+    [MaxLength(40)] public string? CatalogVersion { get; set; }
     public CourseDifficulty Difficulty { get; set; }
     public bool IsPublished { get; set; } = true;
     public int SortOrder { get; set; }

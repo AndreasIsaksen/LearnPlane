@@ -4,7 +4,7 @@ namespace LearnPlane.Web.Data;
 
 public static class GameCatalog
 {
-    private static readonly IReadOnlyDictionary<string, string[]> SubjectTerms = new Dictionary<string, string[]>
+    private static readonly IReadOnlyDictionary<string, string[]> EasyDistractors = new Dictionary<string, string[]>
     {
         ["Norsk"] = ["hovedidé", "avsnitt", "forteller", "verb", "substantiv", "argument", "kilde", "dialekt", "rim", "sammenheng"],
         ["Matematikk"] = ["tallinje", "mønster", "vinkel", "areal", "brøk", "prosent", "variabel", "likhet", "diagram", "sannsynlighet"],
@@ -24,12 +24,12 @@ public static class GameCatalog
 
     public static CourseGame CreateGame(Course course)
     {
-        var targetPool = BuildTargetPool(course);
-        var distractorPool = SubjectTerms
+        var vocabulary = CurriculumCatalog.GetGameVocabulary(course);
+        var easyDistractors = EasyDistractors
             .Where(x => x.Key != course.Subject)
             .SelectMany(x => x.Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(x => !targetPool.Contains(x, StringComparer.OrdinalIgnoreCase))
+            .Where(x => !vocabulary.Targets.Contains(x, StringComparer.OrdinalIgnoreCase))
             .ToArray();
         var points = course.Difficulty switch
         {
@@ -46,13 +46,15 @@ public static class GameCatalog
         return new CourseGame
         {
             Course = course,
-            Title = $"Begrepsjakt: {course.Title}",
-            Intro = "Finn begrepene som hører til fagområdet. Hvert nivå har flere feller og krever skarpere fagblikk.",
+            Title = $"Fagoppdrag: {course.Title}",
+            Intro = vocabulary.Intro,
             Levels = Enumerable.Range(1, 3).Select(levelNumber =>
             {
                 var count = levelNumber switch { 1 => 3, 2 => 5, _ => 7 };
-                var targets = targetPool.Take(count).ToArray();
-                var distractors = distractorPool.Skip((course.Id + levelNumber) % 9).Take(count).ToArray();
+                var targets = vocabulary.Targets.Take(count).ToArray();
+                var distractorPool = levelNumber == 1 ? easyDistractors : vocabulary.Distractors;
+                var offset = (course.Grade * 3 + course.SortOrder * 5 + levelNumber) % Math.Max(1, distractorPool.Count);
+                var distractors = distractorPool.Concat(distractorPool).Skip(offset).Take(count).ToArray();
                 var cards = targets.Select((text, index) => new GameCard { Text = text, IsTarget = true, SortOrder = index * 2 + 1 })
                     .Concat(distractors.Select((text, index) => new GameCard { Text = text, IsTarget = false, SortOrder = index * 2 + 2 }))
                     .OrderBy(x => x.SortOrder).ToList();
@@ -60,20 +62,13 @@ public static class GameCatalog
                 {
                     LevelNumber = levelNumber,
                     Title = titles[levelNumber - 1],
-                    Instructions = $"Velg nøyaktig {count} begreper som passer til {course.Subject.ToLowerInvariant()} og temaet «{course.Title}».",
+                    Instructions = levelNumber == 1
+                        ? $"Velg nøyaktig {count} grunnbegreper som hører til «{course.Title}» – ikke bare til andre skolefag."
+                        : $"Velg nøyaktig {count} begreper som hører direkte til «{course.Title}». Fellene er nå ekte begreper fra andre temaer i {course.Subject.ToLowerInvariant()}.",
                     MaxPoints = points[levelNumber - 1],
                     Cards = cards
                 };
             }).ToList()
         };
-    }
-
-    private static string[] BuildTargetPool(Course course)
-    {
-        var titleWords = course.Title.Split([' ', ',', '-', '–'], StringSplitOptions.RemoveEmptyEntries)
-            .Where(x => x.Length >= 4)
-            .Select(x => x.Trim().ToLowerInvariant());
-        var subjectTerms = SubjectTerms.GetValueOrDefault(course.Subject, SubjectTerms["Norsk"]);
-        return titleWords.Concat(subjectTerms).Distinct(StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
     }
 }

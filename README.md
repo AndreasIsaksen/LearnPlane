@@ -6,9 +6,10 @@ LearnPlane er en norskspråklig læringsplattform for elever fra 1. til 10. klas
 
 - Alle elever får tilgang til alle trinn og fag, med filtrering på klasse og fag.
 - Nye elever registrerer alder. Normalprogresjonen 6 år = 1. klasse brukes til poengreglene; kurs under elevens nåværende trinn kan gjennomføres fritt, men gir ikke poeng.
-- To kurs med fire quizspørsmål per fag og trinn opprettes automatisk første gang appen starter.
+- To kurs med seks forklarende kapitler og fire fagspesifikke quizoppgaver per fag og trinn opprettes automatisk. Hvert kurs inneholder kjerneidé, utdyping, gjennomarbeidet eksempel, arbeidsmåte, vanlige misforståelser og en selvstendig utfordring.
 - Minst 70 % riktige svar gir bestått og ¾ av poengpotten. 100 % gir den siste fjerdedelen. Quiz og spill kan gjentas ubegrenset, men hver del av potten deles bare ut én gang.
-- Hvert kurs har en aldersjustert begrepsjakt i tre nivåer. Nivåene låses opp i rekkefølge og gir 1–20 poeng per nivå, avhengig av vanskelighetsgrad.
+- Hvert kurs har et aldersjustert fagoppdrag i tre nivåer. Elevene sorterer først mot andre skolefag og deretter mot nærliggende begreper i samme fag. Nivåene låses opp i rekkefølge og gir 1–20 poeng per nivå.
+- Etter levert quiz vises riktig svar og en faglig forklaring for hver oppgave, slik at nye forsøk også fungerer som læring.
 - Resultatlisten bruker beste quizresultat per kurs og beste spillresultat per nivå, og viser aldri antall forsøk.
 - Elever kan bruke tilgjengelige quizpoeng på administratorstyrte belønninger gjennom en persistent handlekurv.
 - Kjøp lagres med historiske navn, bilder og priser, mens resultatlisten fortsatt viser opptjente poeng uavhengig av forbruk.
@@ -55,7 +56,7 @@ Kurskatalogen følger fagene og prinsippene i Kunnskapsløftet 2020 (LK20). Hald
 - [Fag- og timefordeling – Utdanningsdirektoratet](https://www.udir.no/laring-og-trivsel/lareplanverket/fag-og-timefordeling/)
 - [Helheten i LK20 – Utdanningsdirektoratet](https://www.udir.no/laring-og-trivsel/lareplanverket/stotte/helhet-lareplanverket/)
 
-Det innebygde innholdet er et funksjonelt startbibliotek og et læringssupplement. Administratorverktøyet er laget for videre faglig kvalitetssikring og utvidelse sammen med lærere.
+Det innebygde innholdet er versjonert. Ved oppgradering erstattes den opprinnelige, generiske startkatalogen uten at kurs-ID-er, brukere, poeng eller tidligere gjennomføringer slettes. Innholdet er et læringssupplement, og administratorverktøyet støtter videre kvalitetssikring sammen med lærere.
 
 ## Lokal utvikling og test
 
