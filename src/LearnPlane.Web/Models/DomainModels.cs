@@ -100,6 +100,7 @@ public sealed class GameLevel
     [MaxLength(100)] public string Title { get; set; } = string.Empty;
     [MaxLength(500)] public string Instructions { get; set; } = string.Empty;
     [Range(1, 20)] public int MaxPoints { get; set; }
+    public GameLevelMode Mode { get; set; } = GameLevelMode.CardSort;
     public ICollection<GameCard> Cards { get; set; } = [];
     public ICollection<GameLevelAttempt> Attempts { get; set; } = [];
 }
@@ -109,9 +110,19 @@ public sealed class GameCard
     public int Id { get; set; }
     public int GameLevelId { get; set; }
     public GameLevel Level { get; set; } = null!;
-    [MaxLength(100)] public string Text { get; set; } = string.Empty;
+    [MaxLength(300)] public string Text { get; set; } = string.Empty;
     public bool IsTarget { get; set; }
+    [MaxLength(40)] public string? PairKey { get; set; }
+    public int? CorrectPosition { get; set; }
+    [MaxLength(16)] public string VisualCue { get; set; } = string.Empty;
     public int SortOrder { get; set; }
+}
+
+public enum GameLevelMode
+{
+    CardSort = 1,
+    Matching = 2,
+    Jigsaw = 3
 }
 
 public sealed class GameLevelAttempt

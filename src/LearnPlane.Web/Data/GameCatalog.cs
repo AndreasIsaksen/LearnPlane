@@ -38,37 +38,62 @@ public static class GameCatalog
             _ => new[] { 8, 14, 20 }
         };
         var titles = course.Grade <= 3
-            ? new[] { "Ordskogen", "Skattejakten", "Mesterstien" }
+            ? new[] { "Kortskogen", "Koble kompisene", "Puslemesteren" }
             : course.Grade <= 7
-                ? new[] { "Begrepsjakten", "Kodeknekkeren", "Mesteroppdraget" }
-                : new[] { "Fagduellen", "Sammenhengslabben", "Ekspertnivået" };
+                ? new[] { "Kortjakten", "Koblingskartet", "Fagpuslespillet" }
+                : new[] { "Fagduellen", "Sammenhengslabben", "Analysepuslespillet" };
+        var visualCues = new[] { "◆", "●", "▲", "■", "✦", "⬟", "◈", "⬢", "✚", "◇" };
+
+        var sortTargets = vocabulary.Targets.Take(3).ToArray();
+        var sortOffset = (course.Grade * 3 + course.SortOrder * 5 + 1) % easyDistractors.Length;
+        var sortDistractors = easyDistractors.Concat(easyDistractors).Skip(sortOffset).Take(3).ToArray();
+        var sortCards = sortTargets.Select((cardText, index) => new GameCard
+            {
+                Text = cardText, IsTarget = true, SortOrder = index * 2 + 1, VisualCue = visualCues[index]
+            })
+            .Concat(sortDistractors.Select((cardText, index) => new GameCard
+            {
+                Text = cardText, SortOrder = index * 2 + 2, VisualCue = visualCues[index + 3]
+            })).OrderBy(x => x.SortOrder).ToList();
+
+        var matchingCards = vocabulary.Pairs.SelectMany((pair, index) => new[]
+        {
+            new GameCard { Text = pair.Prompt, IsTarget = true, PairKey = $"pair-{index}", SortOrder = index + 1, VisualCue = "◆" },
+            new GameCard { Text = pair.Answer, PairKey = $"pair-{index}", SortOrder = index + 1 + vocabulary.Pairs.Count, VisualCue = "●" }
+        }).ToList();
+
+        var jigsawCards = vocabulary.SequencePieces.Select((piece, index) => new GameCard
+        {
+            Text = piece, IsTarget = true, CorrectPosition = index + 1, SortOrder = index + 1,
+            VisualCue = visualCues[index]
+        }).ToList();
 
         return new CourseGame
         {
             Course = course,
             Title = $"Fagoppdrag: {course.Title}",
             Intro = vocabulary.Intro,
-            Levels = Enumerable.Range(1, 3).Select(levelNumber =>
-            {
-                var count = levelNumber switch { 1 => 3, 2 => 5, _ => 7 };
-                var targets = vocabulary.Targets.Take(count).ToArray();
-                var distractorPool = levelNumber == 1 ? easyDistractors : vocabulary.Distractors;
-                var offset = (course.Grade * 3 + course.SortOrder * 5 + levelNumber) % Math.Max(1, distractorPool.Count);
-                var distractors = distractorPool.Concat(distractorPool).Skip(offset).Take(count).ToArray();
-                var cards = targets.Select((text, index) => new GameCard { Text = text, IsTarget = true, SortOrder = index * 2 + 1 })
-                    .Concat(distractors.Select((text, index) => new GameCard { Text = text, IsTarget = false, SortOrder = index * 2 + 2 }))
-                    .OrderBy(x => x.SortOrder).ToList();
-                return new GameLevel
+            Levels =
+            [
+                new GameLevel
                 {
-                    LevelNumber = levelNumber,
-                    Title = titles[levelNumber - 1],
-                    Instructions = levelNumber == 1
-                        ? $"Velg nøyaktig {count} grunnbegreper som hører til «{course.Title}» – ikke bare til andre skolefag."
-                        : $"Velg nøyaktig {count} begreper som hører direkte til «{course.Title}». Fellene er nå ekte begreper fra andre temaer i {course.Subject.ToLowerInvariant()}.",
-                    MaxPoints = points[levelNumber - 1],
-                    Cards = cards
-                };
-            }).ToList()
+                    LevelNumber = 1, Mode = GameLevelMode.CardSort, Title = titles[0], MaxPoints = points[0],
+                    Instructions = $"Finn de tre kortene som hører direkte til «{course.Title}». Symbolene er bare dekorasjon – bruk fagkunnskapen.",
+                    Cards = sortCards
+                },
+                new GameLevel
+                {
+                    LevelNumber = 2, Mode = GameLevelMode.Matching, Title = titles[1], MaxPoints = points[1],
+                    Instructions = "Koble hver etikett til riktig forklaring. Velg først et kort til venstre og deretter svaret til høyre; linjene viser koblingene dine.",
+                    Cards = matchingCards
+                },
+                new GameLevel
+                {
+                    LevelNumber = 3, Mode = GameLevelMode.Jigsaw, Title = titles[2], MaxPoints = points[2],
+                    Instructions = "Bygg det faglige puslespillet: trykk brikkene i den rekkefølgen en grundig problemløser bør arbeide.",
+                    Cards = jigsawCards
+                }
+            ]
         };
     }
 }

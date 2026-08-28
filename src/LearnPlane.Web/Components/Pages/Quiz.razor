@@ -19,20 +19,28 @@ else if (_result is not null)
         @if (!_result.CanEarnPoints) { <div class="alert info">Dette kurset er under ditt nåværende klassetrinn (@_result.CurrentGrade. klasse), så gjennomføringen gir ikke poeng.</div> }
         else if (_result.NewlyAwardedPoints > 0) { <div class="points-earned">+@_result.NewlyAwardedPoints poeng</div> }
         else if (_result.Score.Passed) { <p>Du har allerede fått alle poengene som dette resultatet kan gi. Få 100 % for å sikre hele potten på @_result.MaxPoints poeng.</p> }
-        <div class="button-row"><button class="button secondary" @onclick="TryAgain">Prøv igjen</button><a class="button" href="@($"/kurs/{Id}")">Til kurset</a></div>
+        @if (_result.Lockout.IsLocked)
+        {
+            <div class="lockout-panel compact" role="alert"><span aria-hidden="true">⏳</span><div><strong>Quizen er midlertidig låst</strong><p>Tre feil innen 30 minutter gir en pause på 30 minutter. Omtrent @_result.Lockout.RemainingMinutes minutter gjenstår.</p></div></div>
+        }
+        <div class="button-row">
+            @if (!_result.Lockout.IsLocked) { <button class="button secondary" @onclick="TryAgainAsync">Prøv igjen</button> }
+            <a class="button" href="@($"/kurs/{Id}")">Til kurset</a>
+        </div>
     </section>
     <section class="quiz-review" aria-labelledby="quiz-review-title">
         <div class="eyebrow">Lær av svarene</div>
         <h2 id="quiz-review-title">Faglig gjennomgang</h2>
         <p>Se hvorfor svaret er riktig før du prøver på nytt eller går videre.</p>
-        @foreach (var question in _course.Questions.OrderBy(x => x.SortOrder))
+        @for (var index = 0; index < _questionOrder.Count; index++)
         {
+            var question = _questionOrder[index];
             var selectedId = _answers.GetValueOrDefault(question.Id);
             var selected = question.Options.Single(x => x.Id == selectedId);
             var correct = question.Options.Single(x => x.IsCorrect);
             var answeredCorrectly = selected.Id == correct.Id;
             <article class="review-item @(answeredCorrectly ? "correct" : "incorrect")">
-                <h3><span>@(answeredCorrectly ? "✓" : "→")</span> Spørsmål @question.SortOrder</h3>
+                <h3><span>@(answeredCorrectly ? "✓" : "→")</span> Spørsmål @(index + 1)</h3>
                 <p class="review-question">@question.Text</p>
                 <p><strong>Ditt svar:</strong> @selected.Text</p>
                 @if (!answeredCorrectly)
@@ -44,16 +52,30 @@ else if (_result is not null)
         }
     </section>
 }
+else if (_lockout.IsLocked)
+{
+    <section class="lockout-panel" role="alert">
+        <span class="lockout-icon" aria-hidden="true">⏳</span>
+        <div>
+            <div class="eyebrow">Læringspause</div>
+            <h1>Denne quizen er låst en liten stund</h1>
+            <p>Tre mislykkede forsøk innen 30 minutter utløser en 30-minutters pause. Bare denne quizen er låst; andre kurs, quizer og spill er fortsatt åpne.</p>
+            <p><strong>Omtrent @_lockout.RemainingMinutes minutter gjenstår.</strong></p>
+            <a class="button" href="@($"/kurs/{Id}")">Tilbake til kurset</a>
+        </div>
+    </section>
+}
 else
 {
     <PageTitle>Quiz: @_course.Title – LearnPlane</PageTitle>
-    <div class="quiz-header"><div class="eyebrow">@_course.Subject · @_course.Grade. klasse</div><h1>@_course.Title</h1><p>Velg ett svar på hvert spørsmål. 70 % gir bestått og ¾ av poengene; 100 % gir hele potten. Hver del av potten deles bare ut én gang.</p></div>
+    <div class="quiz-header"><div class="eyebrow">@_course.Subject · @_course.Grade. klasse</div><h1>@_course.Title</h1><p>Velg ett svar på hvert av @_questionOrder.Count spørsmål. Rekkefølgen på både spørsmål og svar stokkes for hvert forsøk. 70 % gir bestått og ¾ av poengene; 100 % gir hele potten.</p><div class="penalty-note"><span>⏱</span><span>Tre mislykkede forsøk innen 30 minutter låser bare denne quizen i 30 minutter.</span></div></div>
     <div class="quiz-questions">
-        @foreach (var question in _course.Questions.OrderBy(x => x.SortOrder))
+        @for (var index = 0; index < _questionOrder.Count; index++)
         {
+            var question = _questionOrder[index];
             <fieldset class="question-card">
-                <legend><span>Spørsmål @question.SortOrder</span>@question.Text</legend>
-                @foreach (var option in question.Options.OrderBy(x => x.SortOrder))
+                <legend><span>Spørsmål @(index + 1) av @_questionOrder.Count</span>@question.Text</legend>
+                @foreach (var option in _optionOrder[question.Id])
                 {
                     <label class="answer-option">
                         <input type="radio" name="@($"question-{question.Id}")" value="@option.Id"
@@ -73,7 +95,11 @@ else
     [Parameter] public int Id { get; set; }
     private Course? _course;
     private readonly Dictionary<int, int> _answers = [];
+    private List<QuizQuestion> _questionOrder = [];
+    private Dictionary<int, List<AnswerOption>> _optionOrder = [];
     private QuizSubmission? _result;
+    private ChallengeLockoutStatus _lockout = ChallengeLockoutStatus.Unlocked;
+    private string? _userId;
     private string? _error;
     private bool _submitting;
 
@@ -82,6 +108,10 @@ else
         await using var db = await DbFactory.CreateDbContextAsync();
         _course = await db.Courses.AsNoTracking().Include(x => x.Questions).ThenInclude(x => x.Options)
             .SingleOrDefaultAsync(x => x.Id == Id && x.IsPublished);
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        _lockout = await QuizService.GetLockoutAsync(Id, _userId);
+        ShuffleQuiz();
     }
 
     private void SelectAnswer(int questionId, int optionId) => _answers[questionId] = optionId;
@@ -95,16 +125,43 @@ else
             return;
         }
         _submitting = true;
-        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        _result = await QuizService.SubmitAsync(Id, userId, _answers);
-        _submitting = false;
+        try
+        {
+            _result = await QuizService.SubmitAsync(Id, _userId!, _answers);
+            _lockout = _result.Lockout;
+        }
+        catch (ChallengeLockedException ex)
+        {
+            _lockout = ex.Lockout;
+            _error = ex.Message;
+        }
+        finally { _submitting = false; }
     }
 
-    private void TryAgain()
+    private async Task TryAgainAsync()
     {
+        _lockout = await QuizService.GetLockoutAsync(Id, _userId!);
         _answers.Clear();
         _result = null;
         _error = null;
+        ShuffleQuiz();
+    }
+
+    private void ShuffleQuiz()
+    {
+        if (_course is null) return;
+        _questionOrder = Shuffled(_course.Questions);
+        _optionOrder = _course.Questions.ToDictionary(x => x.Id, x => Shuffled(x.Options));
+    }
+
+    private static List<T> Shuffled<T>(IEnumerable<T> source)
+    {
+        var values = source.ToList();
+        for (var index = values.Count - 1; index > 0; index--)
+        {
+            var swapWith = Random.Shared.Next(index + 1);
+            (values[index], values[swapWith]) = (values[swapWith], values[index]);
+        }
+        return values;
     }
 }

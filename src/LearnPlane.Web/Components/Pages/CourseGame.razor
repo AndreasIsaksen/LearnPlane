@@ -3,7 +3,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject CourseGameService GameService
 
-<PageTitle>Begrepsjakt – LearnPlane</PageTitle>
+<PageTitle>Fagspill – LearnPlane</PageTitle>
 
 @if (_game is null && !_notFound)
 {
@@ -19,7 +19,7 @@ else if (_result is not null)
         <div class="result-icon">@(_result.Passed ? "★" : "↻")</div>
         <div class="eyebrow">Nivå @_result.LevelNumber</div>
         <h1>@(_result.Passed ? "Oppdrag fullført!" : "Nesten der!")</h1>
-        <p>Du fant @_result.Correct av @_result.Total riktige begreper (@_result.Percentage.ToString("0") %).</p>
+        <p>Du løste @_result.Correct av @_result.Total deler riktig (@_result.Percentage.ToString("0") %).</p>
         @if (!_result.CanEarnPoints)
         {
             <div class="alert info">Spillet er under ditt nåværende klassetrinn, så du kan spille fritt uten at det deles ut poeng.</div>
@@ -32,8 +32,18 @@ else if (_result is not null)
         {
             <p>Ingen nye poeng denne gangen. Du kan nå 100 % for å sikre hele nivåpotten på @_result.MaxPoints poeng.</p>
         }
+        @if (_result.Lockout.IsLocked)
+        {
+            <div class="lockout-panel compact" role="alert">
+                <span aria-hidden="true">⏳</span>
+                <div><strong>Spillet er midlertidig låst</strong><p>Tre feil innen 30 minutter gir en pause på 30 minutter. Omtrent @_result.Lockout.RemainingMinutes minutter gjenstår.</p></div>
+            </div>
+        }
         <div class="button-row">
-            <button class="button secondary" @onclick="PlayAgain">Spill nivået igjen</button>
+            @if (!_result.Lockout.IsLocked)
+            {
+                <button class="button secondary" @onclick="PlayAgainAsync">Spill nivået igjen</button>
+            }
             @if (_result.Passed && _result.LevelNumber < 3)
             {
                 <button class="button game-button" @onclick="NextLevel">Neste nivå →</button>
@@ -42,6 +52,19 @@ else if (_result is not null)
             {
                 <a class="button" href="@($"/kurs/{Id}")">Til kurset</a>
             }
+        </div>
+    </section>
+}
+else if (_game is not null && _game.Lockout.IsLocked)
+{
+    <section class="lockout-panel" role="alert">
+        <span class="lockout-icon" aria-hidden="true">⏳</span>
+        <div>
+            <div class="eyebrow">Læringspause</div>
+            <h1>Dette spillet er låst en liten stund</h1>
+            <p>Tre mislykkede forsøk innen 30 minutter utløser en 30-minutters pause. Andre spill og quizer er fortsatt åpne.</p>
+            <p><strong>Omtrent @_game.Lockout.RemainingMinutes minutter gjenstår.</strong></p>
+            <a class="button" href="@($"/kurs/{Id}")">Tilbake til kurset</a>
         </div>
     </section>
 }
@@ -56,6 +79,7 @@ else if (_game is not null && CurrentLevel is not null)
         {
             <div class="alert info">Du går normalt i @_game.CurrentGrade. klasse. Du kan fullføre spillet, men lavere trinn gir ikke poeng.</div>
         }
+        <div class="penalty-note"><span>⏱</span><span>Tre mislykkede spillforsøk innen 30 minutter låser bare dette spillet i 30 minutter.</span></div>
     </header>
 
     <nav class="level-track" aria-label="Spillnivåer">
@@ -63,31 +87,107 @@ else if (_game is not null && CurrentLevel is not null)
         {
             <button class="level-step @(level.Id == _levelId ? "active" : "") @(level.Passed ? "complete" : "")"
                     disabled="@(!level.Unlocked)" @onclick="() => SelectLevel(level.Id)">
-                <span>@(level.Unlocked ? level.Passed ? "✓" : level.Number : "🔒")</span>
+                <span>@(level.Unlocked ? level.Passed ? "✓" : ModeIcon(level.Mode) : "🔒")</span>
                 <strong>@level.Title</strong>
                 <small>@level.MaxPoints poeng</small>
             </button>
         }
     </nav>
 
-    <section class="game-board">
+    <section class="game-board mode-@CurrentLevel.Mode.ToString().ToLowerInvariant()">
         <div class="game-mission">
-            <div><div class="eyebrow">Nivå @CurrentLevel.Number av 3</div><h2>@CurrentLevel.Title</h2><p>@CurrentLevel.Instructions</p></div>
-            <div class="selection-counter"><strong>@_selected.Count/@TargetCount</strong><span>valgt</span></div>
+            <div><div class="eyebrow">Nivå @CurrentLevel.Number av 3 · @ModeName(CurrentLevel.Mode)</div><h2>@CurrentLevel.Title</h2><p>@CurrentLevel.Instructions</p></div>
+            <div class="selection-counter"><strong>@ProgressCount/@CurrentLevel.RequiredCount</strong><span>@ProgressLabel</span></div>
         </div>
-        <div class="word-grid">
-            @foreach (var card in CurrentLevel.Cards)
-            {
-                <button class="word-card @(_selected.Contains(card.Id) ? "selected" : "")"
-                        aria-pressed="@_selected.Contains(card.Id)" @onclick="() => Toggle(card.Id)">
-                    <span aria-hidden="true">@(_selected.Contains(card.Id) ? "✦" : "◇")</span>@card.Text
-                </button>
-            }
-        </div>
+
+        @switch (CurrentLevel.Mode)
+        {
+            case GameLevelMode.CardSort:
+                <div class="word-grid visual-card-grid">
+                    @foreach (var card in CurrentLevel.Cards)
+                    {
+                        <button class="word-card @(_selected.Contains(card.Id) ? "selected" : "")"
+                                aria-pressed="@(_selected.Contains(card.Id) ? "true" : "false")" @onclick="() => ToggleCard(card.Id)">
+                            <span class="visual-cue" aria-hidden="true">@card.VisualCue</span><strong>@card.Text</strong>
+                        </button>
+                    }
+                </div>
+                break;
+            case GameLevelMode.Matching:
+                var prompts = CurrentLevel.Cards.Where(x => x.IsPrompt).ToList();
+                var answers = CurrentLevel.Cards.Where(x => !x.IsPrompt).ToList();
+                <div class="matching-board" style="--match-rows:@prompts.Count">
+                    <svg class="match-lines" viewBox="0 0 1000 @(prompts.Count * 100)" preserveAspectRatio="none" aria-hidden="true">
+                        @foreach (var match in _matches)
+                        {
+                            var leftIndex = prompts.FindIndex(x => x.Id == match.Key);
+                            var rightIndex = answers.FindIndex(x => x.Id == match.Value);
+                            if (leftIndex >= 0 && rightIndex >= 0)
+                            {
+                                <path class="match-line line-@(leftIndex % 5)" d="M 455 @(leftIndex * 100 + 50) C 500 @(leftIndex * 100 + 50), 500 @(rightIndex * 100 + 50), 545 @(rightIndex * 100 + 50)" />
+                            }
+                        }
+                    </svg>
+                    <div class="match-column prompts" aria-label="Etiketter">
+                        @foreach (var prompt in prompts)
+                        {
+                            var matchIndex = prompts.FindIndex(x => x.Id == prompt.Id);
+                            <button class="match-card @(_activePromptId == prompt.Id ? "active" : "") @(_matches.ContainsKey(prompt.Id) ? $"matched line-{matchIndex % 5}" : "")"
+                                    aria-pressed="@(_activePromptId == prompt.Id ? "true" : "false")" @onclick="() => SelectPrompt(prompt.Id)">
+                                <span aria-hidden="true">◆</span>@prompt.Text
+                            </button>
+                        }
+                    </div>
+                    <div class="match-column answers" aria-label="Forklaringer">
+                        @foreach (var answer in answers)
+                        {
+                            var owner = MatchOwner(answer.Id);
+                            var ownerIndex = owner is null ? -1 : prompts.FindIndex(x => x.Id == owner.Value);
+                            <button class="match-card @(owner is not null ? $"matched line-{ownerIndex % 5}" : "")"
+                                    disabled="@(_activePromptId is null && owner is null)" @onclick="() => SelectAnswerCard(answer.Id)">
+                                <span aria-hidden="true">●</span>@answer.Text
+                            </button>
+                        }
+                    </div>
+                </div>
+                <p class="game-hint">Velg en etikett til venstre og deretter forklaringen til høyre. Velg en etikett på nytt for å endre koblingen.</p>
+                break;
+            case GameLevelMode.Jigsaw:
+                <div class="jigsaw-workbench" aria-label="Valgt rekkefølge">
+                    @if (_sequence.Count == 0)
+                    {
+                        <p>Trykk på en brikke nedenfor for å legge den som første steg.</p>
+                    }
+                    @for (var index = 0; index < _sequence.Count; index++)
+                    {
+                        var piece = CurrentLevel.Cards.Single(x => x.Id == _sequence[index]);
+                        <button class="placed-piece" @onclick="() => RemovePiece(piece.Id)" title="Fjern brikken">
+                            <span>@(index + 1)</span><strong>@piece.Text</strong>
+                        </button>
+                    }
+                </div>
+                <div class="jigsaw-pieces">
+                    @foreach (var piece in CurrentLevel.Cards)
+                    {
+                        var position = _sequence.IndexOf(piece.Id);
+                        <button class="jigsaw-piece @(position >= 0 ? "placed" : "")" disabled="@(position >= 0)" @onclick="() => AddPiece(piece.Id)">
+                            <span class="puzzle-tab" aria-hidden="true">@piece.VisualCue</span>
+                            @if (position >= 0) { <small>Plass @(position + 1)</small> }
+                            <strong>@piece.Text</strong>
+                        </button>
+                    }
+                </div>
+                @if (_sequence.Count > 0)
+                {
+                    <button class="link-button game-reset" @onclick="ClearGameState">Tøm rekkefølgen</button>
+                }
+                break;
+        }
+
         @if (!string.IsNullOrWhiteSpace(_error)) { <div class="alert error">@_error</div> }
         <div class="game-actions">
             <span>70 % gir ¾ av poengene. 100 % sikrer resten.</span>
-            <button class="button game-button" disabled="@(_selected.Count != TargetCount || _submitting)" @onclick="SubmitAsync">
+            <button class="button game-button" disabled="@(!ReadyToSubmit || _submitting)" @onclick="SubmitAsync">
                 @(_submitting ? "Sjekker …" : "Fullfør oppdraget")
             </button>
         </div>
@@ -99,13 +199,29 @@ else if (_game is not null && CurrentLevel is not null)
     private GameView? _game;
     private GameSubmission? _result;
     private readonly HashSet<int> _selected = [];
+    private readonly Dictionary<int, int> _matches = [];
+    private readonly List<int> _sequence = [];
+    private int? _activePromptId;
     private string? _userId;
     private string? _error;
     private int _levelId;
     private bool _submitting;
     private bool _notFound;
     private GameLevelView? CurrentLevel => _game?.Levels.SingleOrDefault(x => x.Id == _levelId);
-    private int TargetCount => CurrentLevel?.Cards.Count / 2 ?? 0;
+    private int ProgressCount => CurrentLevel?.Mode switch
+    {
+        GameLevelMode.CardSort => _selected.Count,
+        GameLevelMode.Matching => _matches.Count,
+        GameLevelMode.Jigsaw => _sequence.Count,
+        _ => 0
+    };
+    private string ProgressLabel => CurrentLevel?.Mode switch
+    {
+        GameLevelMode.Matching => "koblet",
+        GameLevelMode.Jigsaw => "plassert",
+        _ => "valgt"
+    };
+    private bool ReadyToSubmit => CurrentLevel is not null && ProgressCount == CurrentLevel.RequiredCount;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -125,14 +241,46 @@ else if (_game is not null && CurrentLevel is not null)
     private void SelectLevel(int id)
     {
         _levelId = id;
-        _selected.Clear();
+        ClearGameState();
+    }
+
+    private void ToggleCard(int cardId)
+    {
+        _error = null;
+        if (!_selected.Remove(cardId) && CurrentLevel is not null && _selected.Count < CurrentLevel.RequiredCount)
+            _selected.Add(cardId);
+    }
+
+    private void SelectPrompt(int promptId)
+    {
+        _error = null;
+        _activePromptId = promptId;
+        _matches.Remove(promptId);
+    }
+
+    private void SelectAnswerCard(int answerId)
+    {
+        if (_activePromptId is null) return;
+        var previousOwner = MatchOwner(answerId);
+        if (previousOwner is not null) _matches.Remove(previousOwner.Value);
+        _matches[_activePromptId.Value] = answerId;
+        _activePromptId = null;
         _error = null;
     }
 
-    private void Toggle(int cardId)
+    private int? MatchOwner(int answerId) => _matches.FirstOrDefault(x => x.Value == answerId) is var pair && pair.Key != 0
+        ? pair.Key : null;
+
+    private void AddPiece(int cardId)
     {
+        if (!_sequence.Contains(cardId)) _sequence.Add(cardId);
         _error = null;
-        if (!_selected.Remove(cardId) && _selected.Count < TargetCount) _selected.Add(cardId);
+    }
+
+    private void RemovePiece(int cardId)
+    {
+        _sequence.Remove(cardId);
+        _error = null;
     }
 
     private async Task SubmitAsync()
@@ -141,24 +289,62 @@ else if (_game is not null && CurrentLevel is not null)
         _submitting = true;
         try
         {
-            _result = await GameService.SubmitAsync(CurrentLevel.Id, _userId, _selected);
+            var moves = CurrentLevel.Mode switch
+            {
+                GameLevelMode.CardSort => _selected.Select(x => new GameMove(x)).ToArray(),
+                GameLevelMode.Matching => _matches.Select(x => new GameMove(x.Key, x.Value)).ToArray(),
+                GameLevelMode.Jigsaw => _sequence.Select((cardId, index) => new GameMove(cardId, Position: index + 1)).ToArray(),
+                _ => []
+            };
+            _result = await GameService.SubmitAsync(CurrentLevel.Id, _userId, moves);
+            await ReloadAsync();
+        }
+        catch (ChallengeLockedException ex)
+        {
+            _error = ex.Message;
             await ReloadAsync();
         }
         catch (InvalidOperationException ex) { _error = ex.Message; }
         finally { _submitting = false; }
     }
 
-    private void PlayAgain()
+    private async Task PlayAgainAsync()
     {
-        _selected.Clear();
+        await ReloadAsync();
+        ClearGameState();
         _result = null;
-        _error = null;
     }
 
     private void NextLevel()
     {
         var next = _game?.Levels.SingleOrDefault(x => x.Number == _result!.LevelNumber + 1 && x.Unlocked);
         if (next is not null) _levelId = next.Id;
-        PlayAgain();
+        ClearGameState();
+        _result = null;
     }
+
+    private void ClearGameState()
+    {
+        _selected.Clear();
+        _matches.Clear();
+        _sequence.Clear();
+        _activePromptId = null;
+        _error = null;
+    }
+
+    private static string ModeName(GameLevelMode mode) => mode switch
+    {
+        GameLevelMode.CardSort => "Kortsortering",
+        GameLevelMode.Matching => "Koble med linjer",
+        GameLevelMode.Jigsaw => "Fagpuslespill",
+        _ => "Spill"
+    };
+
+    private static string ModeIcon(GameLevelMode mode) => mode switch
+    {
+        GameLevelMode.CardSort => "▦",
+        GameLevelMode.Matching => "↔",
+        GameLevelMode.Jigsaw => "🧩",
+        _ => "★"
+    };
 }

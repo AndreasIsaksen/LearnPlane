@@ -1,9 +1,9 @@
 <nav aria-label="Hovedmeny" class="nav-menu">
-    <a href="/">🏠 Oversikt</a>
-    <a href="/resultatliste">🏆 Resultatliste</a>
-    <a href="/butikk">🎁 Belønningsbutikk</a>
-    <a href="/handlekurv">🛒 Handlekurv</a>
-    <a href="/mine-belønninger">✨ Mine belønninger</a>
+    <a href="/" @onclick="Navigate">🏠 Oversikt</a>
+    <a href="/resultatliste" @onclick="Navigate">🏆 Resultatliste</a>
+    <a href="/butikk" @onclick="Navigate">🎁 Belønningsbutikk</a>
+    <a href="/handlekurv" @onclick="Navigate">🛒 Handlekurv</a>
+    <a href="/mine-belønninger" @onclick="Navigate">✨ Mine belønninger</a>
     <div class="nav-heading">Klasse og fag</div>
     @for (var grade = 1; grade <= 10; grade++)
     {
@@ -13,16 +13,21 @@
             <div class="subject-links">
                 @foreach (var subject in CurriculumCatalog.SubjectsForGrade(currentGrade))
                 {
-                    <a href="@($"/kurs?trinn={currentGrade}&fag={Uri.EscapeDataString(subject)}")">@subject</a>
+                    <a href="@($"/kurs?trinn={currentGrade}&fag={Uri.EscapeDataString(subject)}")" @onclick="Navigate">@subject</a>
                 }
             </div>
         </details>
     }
     <AuthorizeView Roles="Admin">
         <div class="nav-heading">Administrasjon</div>
-        <a href="/admin/statistikk">📊 Statistikk</a>
-        <a href="/admin/brukere">👥 Brukere</a>
-        <a href="/admin/kurs">✏️ Kursinnhold</a>
-        <a href="/admin/belønninger">🎁 Belønninger</a>
+        <a href="/admin/statistikk" @onclick="Navigate">📊 Statistikk</a>
+        <a href="/admin/brukere" @onclick="Navigate">👥 Brukere</a>
+        <a href="/admin/kurs" @onclick="Navigate">✏️ Kursinnhold</a>
+        <a href="/admin/belønninger" @onclick="Navigate">🎁 Belønninger</a>
     </AuthorizeView>
 </nav>
+
+@code {
+    [Parameter] public EventCallback OnNavigate { get; set; }
+    private Task Navigate() => OnNavigate.InvokeAsync();
+}

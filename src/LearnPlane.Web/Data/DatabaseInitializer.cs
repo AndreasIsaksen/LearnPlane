@@ -122,6 +122,7 @@ public static class DatabaseInitializer
                     level.Title = levelTemplate.Title;
                     level.Instructions = levelTemplate.Instructions;
                     level.MaxPoints = levelTemplate.MaxPoints;
+                    level.Mode = levelTemplate.Mode;
                     db.GameCards.RemoveRange(level.Cards);
                     level.Cards = levelTemplate.Cards;
                 }
@@ -224,6 +225,11 @@ public static class DatabaseInitializer
             CREATE INDEX IF NOT EXISTS "IX_GameCards_GameLevelId_SortOrder" ON "GameCards" ("GameLevelId", "SortOrder");
             CREATE INDEX IF NOT EXISTS "IX_GameLevelAttempts_UserId_GameLevelId" ON "GameLevelAttempts" ("UserId", "GameLevelId");
             CREATE INDEX IF NOT EXISTS "IX_GameLevelAttempts_GameLevelId" ON "GameLevelAttempts" ("GameLevelId");
+            ALTER TABLE "GameLevels" ADD COLUMN IF NOT EXISTS "Mode" integer NOT NULL DEFAULT 1;
+            ALTER TABLE "GameCards" ALTER COLUMN "Text" TYPE character varying(300);
+            ALTER TABLE "GameCards" ADD COLUMN IF NOT EXISTS "PairKey" character varying(40) NULL;
+            ALTER TABLE "GameCards" ADD COLUMN IF NOT EXISTS "CorrectPosition" integer NULL;
+            ALTER TABLE "GameCards" ADD COLUMN IF NOT EXISTS "VisualCue" character varying(16) NOT NULL DEFAULT '';
             """);
     }
 }

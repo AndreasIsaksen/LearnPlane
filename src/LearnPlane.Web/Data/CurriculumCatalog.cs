@@ -6,11 +6,13 @@ namespace LearnPlane.Web.Data;
 internal sealed record AcademicTopic(string Name, string Core, string Explanation, string Example,
     string Misconception, string[] Terms);
 
-public sealed record GameVocabulary(string Intro, IReadOnlyList<string> Targets, IReadOnlyList<string> Distractors);
+public sealed record GamePair(string Prompt, string Answer);
+public sealed record GameVocabulary(string Intro, IReadOnlyList<string> Targets, IReadOnlyList<string> Distractors,
+    IReadOnlyList<GamePair> Pairs, IReadOnlyList<string> SequencePieces);
 
 public static class CurriculumCatalog
 {
-    public const string ContentVersion = "academic-v2";
+    public const string ContentVersion = "academic-v3";
 
     private static AcademicTopic T(string name, string core, string explanation, string example,
         string misconception, params string[] terms) => new(name, core, explanation, example, misconception, terms);
@@ -189,7 +191,24 @@ public static class CurriculumCatalog
         var topic = topics.FirstOrDefault(x => x.Name == course.Title) ?? topics[0];
         var distractors = topics.Where(x => x != topic).SelectMany(x => x.Terms).Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(x => !topic.Terms.Contains(x, StringComparer.OrdinalIgnoreCase)).ToArray();
-        return new($"Sorter begreper som hører til «{topic.Name}». Senere nivåer bruker nærliggende begreper fra samme fag som feller.", topic.Terms, distractors);
+        var pairs = new[]
+        {
+            new GamePair("Kjerneidé", topic.Core),
+            new GamePair("Faglig forklaring", topic.Explanation),
+            new GamePair("Gjennomarbeidet eksempel", topic.Example),
+            new GamePair("Vanlig misforståelse", topic.Misconception),
+            new GamePair("Nyttig arbeidsmåte", Methods[course.Subject])
+        };
+        var sequence = new[]
+        {
+            $"Avklar hva oppgaven om {topic.Name.ToLowerInvariant()} spør etter.",
+            $"Velg relevante begreper, for eksempel {topic.Terms[0]} og {topic.Terms[1]}.",
+            "Bruk den faglige metoden og vis viktige mellomsteg eller observasjoner.",
+            $"Koble resultatet tilbake til kjerneideen: {topic.Core}",
+            "Kontroller resonnementet, vurder en mulig feil og formuler konklusjonen presist."
+        };
+        return new($"Tre ulike oppdrag trener «{topic.Name}»: sorter kort, koble sammen forklaringer og bygg et faglig puslespill i riktig rekkefølge.",
+            topic.Terms, distractors, pairs, sequence);
     }
 
     private static Course BuildCourse(int grade, string subject, AcademicTopic topic, AcademicTopic[] topics,

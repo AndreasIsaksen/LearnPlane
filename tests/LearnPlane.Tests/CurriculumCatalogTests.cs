@@ -39,7 +39,7 @@ public sealed class CurriculumCatalogTests
         var allQuestionTexts = new List<string>();
         Assert.All(_courses, course =>
         {
-            Assert.Equal(4, course.Questions.Count);
+            Assert.True(course.Questions.Count >= 10);
             Assert.DoesNotContain(course.Questions, x => x.Text.Contains("Hva er hovedtemaet i dette kurset?"));
             Assert.DoesNotContain(course.Questions, x => x.Text.Contains("Hva bør du gjøre hvis du svarer feil"));
             Assert.All(course.Questions, question =>
@@ -82,12 +82,13 @@ public sealed class CurriculumCatalogTests
             Assert.StartsWith("Fagoppdrag:", game.Title);
             Assert.Contains(course.Title, game.Title);
             Assert.Equal(3, game.Levels.Count);
-            Assert.Equal(new[] { 6, 10, 14 }, game.Levels.OrderBy(x => x.LevelNumber).Select(x => x.Cards.Count));
+            Assert.Equal(new[] { 6, 10, 5 }, game.Levels.OrderBy(x => x.LevelNumber).Select(x => x.Cards.Count));
+            Assert.Equal(new[] { GameLevelMode.CardSort, GameLevelMode.Matching, GameLevelMode.Jigsaw },
+                game.Levels.OrderBy(x => x.LevelNumber).Select(x => x.Mode));
             Assert.All(game.Levels, level =>
             {
-                Assert.Equal(level.Cards.Count / 2, level.Cards.Count(x => x.IsTarget));
                 Assert.Equal(level.Cards.Count, level.Cards.Select(x => x.Text).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-                Assert.All(level.Cards, card => Assert.InRange(card.Text.Length, 1, 100));
+                Assert.All(level.Cards, card => Assert.InRange(card.Text.Length, 1, 300));
                 Assert.InRange(level.Instructions.Length, 10, 500);
             });
         });
