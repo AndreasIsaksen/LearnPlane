@@ -5,7 +5,7 @@
 <div class="auth-card">
     <div class="eyebrow">Start reisen</div>
     <h1>Lag en bruker</h1>
-    <p>Alle brukere får tilgang til alle trinn og fag.</p>
+    <p>Alle brukere får tilgang til alle trinn og fag. Alder brukes bare til å finne klassetrinnet som gir poeng.</p>
     @if (!string.IsNullOrWhiteSpace(Error))
     {
         <div class="alert error" role="alert">@Error</div>
@@ -13,6 +13,7 @@
     <form method="post" action="/account/register" class="form-stack">
         <AntiforgeryToken />
         <label>Navn som vises<input name="displayName" minlength="2" maxlength="100" autocomplete="name" required autofocus /></label>
+        <label>Alder<input name="age" type="number" min="6" max="18" inputmode="numeric" required /><small>6 år tilsvarer normalt 1. klasse. Du kan fortsatt åpne alle trinn.</small></label>
         <label>Brukernavn<input name="username" minlength="3" maxlength="50" autocomplete="username" required /></label>
         <label>Passord<input name="password" type="password" minlength="8" autocomplete="new-password" required /><small>Minst 8 tegn, med en liten bokstav og et tall.</small></label>
         <label>Gjenta passord<input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required /></label>

@@ -94,7 +94,9 @@ public sealed class RewardStoreService(
 
     private async Task<int> GetBalanceAsync(LearnPlaneDbContext db, string userId)
     {
-        var earned = await db.QuizAttempts.Where(x => x.UserId == userId).SumAsync(x => (int?)x.PointsAwarded) ?? 0;
+        var quizPoints = await db.QuizAttempts.Where(x => x.UserId == userId).SumAsync(x => (int?)x.PointsAwarded) ?? 0;
+        var gamePoints = await db.GameLevelAttempts.Where(x => x.UserId == userId).SumAsync(x => (int?)x.PointsAwarded) ?? 0;
+        var earned = quizPoints + gamePoints;
         var spent = await db.RewardPurchases.Where(x => x.UserId == userId).SumAsync(x => (int?)x.TotalPoints) ?? 0;
         return balanceCalculator.Calculate(earned, spent);
     }

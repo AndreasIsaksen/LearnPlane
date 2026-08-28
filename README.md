@@ -1,13 +1,15 @@
 # LearnPlane
 
-LearnPlane er en norskspråklig læringsplattform for elever fra 1. til 10. klasse. Løsningen er en Blazor Web App med PostgreSQL, innlogging, kurs, quiz, poeng, belønningsbutikk, resultatliste og administrasjon.
+LearnPlane er en norskspråklig læringsplattform for elever fra 1. til 10. klasse. Løsningen er en Blazor Web App med PostgreSQL, innlogging, kurs, quiz, læringsspill, poeng, belønningsbutikk, resultatliste og administrasjon.
 
 ## Funksjoner
 
 - Alle elever får tilgang til alle trinn og fag, med filtrering på klasse og fag.
+- Nye elever registrerer alder. Normalprogresjonen 6 år = 1. klasse brukes til poengreglene; kurs under elevens nåværende trinn kan gjennomføres fritt, men gir ikke poeng.
 - To kurs med fire quizspørsmål per fag og trinn opprettes automatisk første gang appen starter.
-- Minst 70 % riktige svar gir bestått. Lett, middels og utfordrende quiz gir henholdsvis 10, 20 og 30 poeng.
-- Resultatlisten bruker beste resultat per kurs og viser aldri antall forsøk.
+- Minst 70 % riktige svar gir bestått og ¾ av poengpotten. 100 % gir den siste fjerdedelen. Quiz og spill kan gjentas ubegrenset, men hver del av potten deles bare ut én gang.
+- Hvert kurs har en aldersjustert begrepsjakt i tre nivåer. Nivåene låses opp i rekkefølge og gir 1–20 poeng per nivå, avhengig av vanskelighetsgrad.
+- Resultatlisten bruker beste quizresultat per kurs og beste spillresultat per nivå, og viser aldri antall forsøk.
 - Elever kan bruke tilgjengelige quizpoeng på administratorstyrte belønninger gjennom en persistent handlekurv.
 - Kjøp lagres med historiske navn, bilder og priser, mens resultatlisten fortsatt viser opptjente poeng uavhengig av forbruk.
 - Administrator kan se alle gjennomføringer, endre brukeres visningsnavn og passord, og redigere kurs, læringstekst, spørsmål og svaralternativer.
@@ -31,7 +33,7 @@ Løsningen bruker nøyaktig to hovedcontainere:
 - `learnplane-webapp`: Blazor/.NET 10
 - `learnplane-database`: PostgreSQL 17 med persistent Docker-volum
 
-Databaseskjema, roller, kurs, en eksempelbelønning og administrator opprettes automatisk. Belønningsskjemaet oppgraderes også automatisk for eksisterende installasjoner fra første versjon. Stopp med `docker compose down`. Database og innloggingsnøkler beholdes i Docker-volumer; `docker compose down -v` sletter også disse dataene permanent.
+Databaseskjema, roller, kurs, spill, en eksempelbelønning og administrator opprettes automatisk. Alders-, spill- og belønningsskjema oppgraderes også automatisk for eksisterende installasjoner. Stopp med `docker compose down`. Database og innloggingsnøkler beholdes i Docker-volumer; `docker compose down -v` sletter også disse dataene permanent.
 
 ## Innlogging og sikkerhet
 

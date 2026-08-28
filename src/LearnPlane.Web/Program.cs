@@ -41,9 +41,12 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<QuizService>();
+builder.Services.AddScoped<CourseGameService>();
 builder.Services.AddScoped<RewardStoreService>();
 builder.Services.AddSingleton<PointBalanceCalculator>();
 builder.Services.AddSingleton<ScoreCalculator>();
+builder.Services.AddSingleton<ChallengePointCalculator>();
+builder.Services.AddSingleton<GradeEligibilityPolicy>();
 
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
 if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
@@ -84,6 +87,7 @@ app.MapPost("/account/login", async (
 app.MapPost("/account/register", async (
     [FromForm] string username,
     [FromForm] string displayName,
+    [FromForm] int age,
     [FromForm] string password,
     [FromForm] string confirmPassword,
     UserManager<ApplicationUser> userManager,
@@ -93,10 +97,12 @@ app.MapPost("/account/register", async (
     displayName = displayName.Trim();
     if (username.Length < 3 || displayName.Length < 2)
         return Results.LocalRedirect("/registrer?feil=Brukernavn+og+navn+er+for+korte.");
+    if (age is < GradeEligibilityPolicy.MinimumAge or > GradeEligibilityPolicy.MaximumAge)
+        return Results.LocalRedirect("/registrer?feil=Alder+m%C3%A5+v%C3%A6re+mellom+6+og+18+%C3%A5r.");
     if (!string.Equals(password, confirmPassword, StringComparison.Ordinal))
         return Results.LocalRedirect("/registrer?feil=Passordene+er+ikke+like.");
 
-    var user = new ApplicationUser { UserName = username, DisplayName = displayName };
+    var user = new ApplicationUser { UserName = username, DisplayName = displayName, Age = age };
     var result = await userManager.CreateAsync(user, password);
     if (!result.Succeeded)
     {

@@ -20,12 +20,23 @@ else
             <div><div class="eyebrow">Klar for å teste deg?</div><h2>Ta quizen</h2><p>Du må ha minst 70 % riktig for å bestå.</p></div>
             <a class="button" href="@($"/kurs/{_course.Id}/quiz")">Start quiz · @((int)_course.Difficulty * 10) poeng</a>
         </div>
+        <div class="game-callout">
+            <div><div class="eyebrow">Lær med fart og fagblikk</div><h2>Spill begrepsjakten</h2><p>Tre nivåer, flere feller for hver runde og opptil @GamePoints poeng.</p></div>
+            <a class="button game-button" href="@($"/kurs/{_course.Id}/spill")">Start spillet</a>
+        </div>
     </article>
 }
 
 @code {
     [Parameter] public int Id { get; set; }
     private Course? _course;
+    private int GamePoints => _course?.Difficulty switch
+    {
+        CourseDifficulty.Lett => 18,
+        CourseDifficulty.Middels => 30,
+        CourseDifficulty.Utfordrende => 42,
+        _ => 0
+    };
     protected override async Task OnParametersSetAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();

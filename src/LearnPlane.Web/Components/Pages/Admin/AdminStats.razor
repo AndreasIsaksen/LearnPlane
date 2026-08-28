@@ -3,7 +3,7 @@
 @inject IDbContextFactory<LearnPlaneDbContext> DbFactory
 
 <PageTitle>Statistikk – LearnPlane</PageTitle>
-<div class="page-header"><div class="eyebrow">Administrasjon</div><h1>Full kursstatistikk</h1><p>Alle gjennomføringer vises her. Denne siden er kun tilgjengelig for administrator.</p></div>
+<div class="page-header"><div class="eyebrow">Administrasjon</div><h1>Full læringsstatistikk</h1><p>Alle quiz- og spillgjennomføringer vises her. Denne siden er kun tilgjengelig for administrator.</p></div>
 
 @if (_attempts is null)
 {
@@ -27,14 +27,14 @@ else
     </div>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Tidspunkt</th><th>Bruker</th><th>Kurs</th><th>Trinn</th><th>Resultat</th><th>Status</th><th>Poeng</th></tr></thead>
+            <thead><tr><th>Tidspunkt</th><th>Bruker</th><th>Aktivitet</th><th>Trinn</th><th>Resultat</th><th>Status</th><th>Poeng</th></tr></thead>
             <tbody>
             @foreach (var attempt in FilteredAttempts)
             {
                 <tr>
                     <td>@attempt.CompletedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
                     <td>@attempt.UserName</td>
-                    <td><strong>@attempt.CourseTitle</strong><small>@attempt.Subject</small></td>
+                    <td><strong>@attempt.CourseTitle</strong><small>@attempt.ActivityType · @attempt.Subject</small></td>
                     <td>@attempt.Grade.</td>
                     <td>@attempt.CorrectAnswers/@attempt.TotalQuestions (@attempt.Percentage.ToString("0") %)</td>
                     <td><span class="status @(attempt.Passed ? "success" : "muted")">@(attempt.Passed ? "Bestått" : "Ikke bestått")</span></td>
@@ -58,11 +58,17 @@ else
     {
         await using var db = await DbFactory.CreateDbContextAsync();
         _users = await db.Users.AsNoTracking().OrderBy(x => x.DisplayName).Select(x => new UserFilter(x.Id, x.DisplayName)).ToListAsync();
-        _attempts = await db.QuizAttempts.AsNoTracking().OrderByDescending(x => x.CompletedAtUtc)
-            .Select(x => new AttemptRow(x.UserId, x.User.DisplayName, x.Course.Title, x.Course.Subject, x.Course.Grade,
+        var quizAttempts = await db.QuizAttempts.AsNoTracking()
+            .Select(x => new AttemptRow(x.UserId, x.User.DisplayName, x.Course.Title, x.Course.Subject, x.Course.Grade, "Quiz",
                 x.CorrectAnswers, x.TotalQuestions, x.Percentage, x.Passed, x.PointsAwarded, x.CompletedAtUtc)).ToListAsync();
+        var gameAttempts = await db.GameLevelAttempts.AsNoTracking()
+            .Select(x => new AttemptRow(x.UserId, x.User.DisplayName,
+                x.Level.CourseGame.Course.Title + " – " + x.Level.Title, x.Level.CourseGame.Course.Subject,
+                x.Level.CourseGame.Course.Grade, "Spill nivå " + x.Level.LevelNumber,
+                x.CorrectSelections, x.TotalTargets, x.Percentage, x.Passed, x.PointsAwarded, x.CompletedAtUtc)).ToListAsync();
+        _attempts = quizAttempts.Concat(gameAttempts).OrderByDescending(x => x.CompletedAtUtc).ToList();
     }
     private sealed record UserFilter(string Id, string Name);
-    private sealed record AttemptRow(string UserId, string UserName, string CourseTitle, string Subject, int Grade,
+    private sealed record AttemptRow(string UserId, string UserName, string CourseTitle, string Subject, int Grade, string ActivityType,
         int CorrectAnswers, int TotalQuestions, decimal Percentage, bool Passed, int PointsAwarded, DateTime CompletedAtUtc);
 }

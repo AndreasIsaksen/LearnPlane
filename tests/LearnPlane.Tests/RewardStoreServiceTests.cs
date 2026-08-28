@@ -39,6 +39,31 @@ public sealed class RewardStoreServiceTests
         Assert.Empty(await db.RewardPurchases.ToListAsync());
     }
 
+    [Fact]
+    public async Task BalanceIncludesPointsFromGameLevels()
+    {
+        await using var fixture = await StoreFixture.CreateAsync(earnedPoints: 20, pricePoints: 50);
+        await using (var db = await fixture.Factory.CreateDbContextAsync())
+        {
+            var course = await db.Courses.SingleAsync();
+            var game = new CourseGame { Course = course, Title = "Testspill", Intro = "Test" };
+            var level = new GameLevel { CourseGame = game, LevelNumber = 1, Title = "Nivå 1", Instructions = "Test", MaxPoints = 10 };
+            db.GameLevelAttempts.Add(new GameLevelAttempt
+            {
+                UserId = StoreFixture.UserId,
+                Level = level,
+                CorrectSelections = 3,
+                TotalTargets = 3,
+                Percentage = 100,
+                Passed = true,
+                PointsAwarded = 10
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(30, await fixture.Service.GetBalanceAsync(StoreFixture.UserId));
+    }
+
     private sealed class StoreFixture(SqliteConnection connection, TestDbContextFactory factory, RewardStoreService service)
         : IAsyncDisposable
     {
