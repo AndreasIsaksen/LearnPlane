@@ -1,0 +1,64 @@
+@page "/"
+@attribute [Authorize]
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Oversikt – LearnPlane</PageTitle>
+
+@if (_loading)
+{
+    <div class="loading">Laster læringsreisen din …</div>
+}
+else
+{
+    <section class="hero">
+        <div>
+            <div class="eyebrow">Din læringsreise</div>
+            <h1>Hva vil du lære i dag?</h1>
+            <p>Velg et trinn og et fag. Du har tilgang til alt, og kan alltid prøve en quiz på nytt.</p>
+        </div>
+        <div class="hero-score"><strong>@_points</strong><span>poeng</span></div>
+    </section>
+
+    <section class="stats-grid" aria-label="Din framdrift">
+        <article><strong>@_completedCourses</strong><span>kurs bestått</span></article>
+        <article><strong>@_bestPercentage.ToString("0") %</strong><span>beste resultat</span></article>
+        <article><strong>@_availableCourses</strong><span>kurs tilgjengelig</span></article>
+    </section>
+
+    <section class="section-heading">
+        <div><div class="eyebrow">Filtrer etter alder</div><h2>Velg klasse</h2></div>
+    </section>
+    <div class="grade-grid">
+        @for (var grade = 1; grade <= 10; grade++)
+        {
+            var current = grade;
+            <a class="grade-card" href="@($"/kurs?trinn={current}")">
+                <span class="grade-number">@current</span>
+                <span><strong>@current. klasse</strong><small>@CurriculumCatalog.SubjectsForGrade(current).Count fag</small></span>
+                <span aria-hidden="true">→</span>
+            </a>
+        }
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private int _points;
+    private int _completedCourses;
+    private int _availableCourses;
+    private decimal _bestPercentage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var attempts = await db.QuizAttempts.AsNoTracking().Where(x => x.UserId == userId).ToListAsync();
+        _points = attempts.Sum(x => x.PointsAwarded);
+        _completedCourses = attempts.Where(x => x.Passed).Select(x => x.CourseId).Distinct().Count();
+        _bestPercentage = attempts.Count == 0 ? 0 : attempts.Max(x => x.Percentage);
+        _availableCourses = await db.Courses.CountAsync(x => x.IsPublished);
+        _loading = false;
+    }
+}

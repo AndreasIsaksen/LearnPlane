@@ -1,0 +1,25 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="typeof(Program).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated == true)
+                    {
+                        <div class="empty-state"><h1>Ingen tilgang</h1><p>Du har ikke tilgang til denne siden.</p></div>
+                    }
+                    else
+                    {
+                        <RedirectToLogin />
+                    }
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Fant ikke siden – LearnPlane</PageTitle>
+            <LayoutView Layout="typeof(MainLayout)">
+                <div class="empty-state"><h1>Her var det tomt</h1><p>Siden finnes ikke.</p><a class="button" href="/">Til forsiden</a></div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

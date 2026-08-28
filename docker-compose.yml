@@ -1,0 +1,45 @@
+services:
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: learnplane-webapp
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=database;Port=5432;Database=${POSTGRES_DB:-learnplane};Username=${POSTGRES_USER:-learnplane};Password=${POSTGRES_PASSWORD:-change_me}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-3d9XehYf}
+      DataProtection__KeysPath: /app/data-protection-keys
+    ports:
+      - "${LEARNPLANE_PORT:-8080}:8080"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks: [learnplane]
+    volumes:
+      - learnplane_dataprotection_keys:/app/data-protection-keys
+
+  database:
+    image: postgres:17-alpine
+    container_name: learnplane-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-learnplane}
+      POSTGRES_USER: ${POSTGRES_USER:-learnplane}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - learnplane_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-learnplane} -d ${POSTGRES_DB:-learnplane}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks: [learnplane]
+
+volumes:
+  learnplane_postgres_data:
+  learnplane_dataprotection_keys:
+
+networks:
+  learnplane:
+    driver: bridge

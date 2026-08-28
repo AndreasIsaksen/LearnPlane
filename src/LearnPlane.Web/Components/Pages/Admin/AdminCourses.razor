@@ -1,0 +1,126 @@
+@page "/admin/kurs"
+@attribute [Authorize(Roles = Roles.Admin)]
+@implements IAsyncDisposable
+@inject IDbContextFactory<LearnPlaneDbContext> DbFactory
+
+<PageTitle>Kursinnhold – LearnPlane</PageTitle>
+<div class="page-header"><div class="eyebrow">Administrasjon</div><h1>Rediger kursinnhold</h1><p>Endringer publiseres straks når du lagrer. HTML kan brukes i læringsteksten.</p></div>
+
+@if (!string.IsNullOrWhiteSpace(_message)) { <div class="alert @(_success ? "success" : "error")">@_message</div> }
+<div class="filter-bar admin-filters">
+    <label>Trinn<select @bind="_gradeFilter" @bind:after="ReloadListAsync"><option value="0">Alle</option>@for (var grade = 1; grade <= 10; grade++) { <option value="@grade">@grade. klasse</option> }</select></label>
+    <label>Fag<select @bind="_subjectFilter" @bind:after="ReloadListAsync"><option value="">Alle</option>@foreach (var subject in CurriculumCatalog.SubjectsForGrade(10).Union(CurriculumCatalog.SubjectsForGrade(1)).Order()) { <option>@subject</option> }</select></label>
+    <button class="button button-small" @onclick="NewCourse">+ Nytt kurs</button>
+</div>
+
+<div class="admin-split courses-admin">
+    <section class="admin-list">
+        @foreach (var course in _courseList)
+        {
+            <button class="admin-list-item @(_selected?.Id == course.Id ? "selected" : "")" @onclick="() => LoadCourseAsync(course.Id)">
+                <span class="grade-badge">@course.Grade.</span><span><strong>@course.Title</strong><small>@course.Subject · @(course.IsPublished ? "Publisert" : "Skjult")</small></span>
+            </button>
+        }
+    </section>
+    <section class="admin-editor">
+        @if (_selected is null)
+        {
+            <div class="empty-state"><h2>Velg eller opprett et kurs</h2></div>
+        }
+        else
+        {
+            <EditForm Model="_selected" OnValidSubmit="SaveAsync" class="form-stack">
+                <DataAnnotationsValidator />
+                <div class="form-grid">
+                    <label>Trinn<InputNumber @bind-Value="_selected.Grade" /></label>
+                    <label>Fag<InputText @bind-Value="_selected.Subject" /></label>
+                    <label>Vanskelighetsgrad<InputSelect @bind-Value="_selected.Difficulty">@foreach (var difficulty in Enum.GetValues<CourseDifficulty>()) { <option value="@difficulty">@difficulty</option> }</InputSelect></label>
+                    <label class="checkbox-label"><InputCheckbox @bind-Value="_selected.IsPublished" /> Publisert</label>
+                </div>
+                <label>Tittel<InputText @bind-Value="_selected.Title" /></label>
+                <label>Kort beskrivelse<InputTextArea @bind-Value="_selected.Summary" /></label>
+                <label>Læringstekst (HTML)<InputTextArea class="content-editor" @bind-Value="_selected.Content" /></label>
+                <h3>Quizspørsmål</h3>
+                @foreach (var question in _selected.Questions.OrderBy(x => x.SortOrder))
+                {
+                    <fieldset class="question-editor">
+                        <label>Spørsmål @question.SortOrder<InputTextArea @bind-Value="question.Text" /></label>
+                        <label>Forklaring<InputTextArea @bind-Value="question.Explanation" /></label>
+                        @foreach (var option in question.Options.OrderBy(x => x.SortOrder))
+                        {
+                            <div class="option-editor"><InputCheckbox @bind-Value="option.IsCorrect" aria-label="Riktig svar" /><InputText @bind-Value="option.Text" /></div>
+                        }
+                    </fieldset>
+                }
+                <button class="button" type="submit">Lagre alle endringer</button>
+            </EditForm>
+        }
+    </section>
+</div>
+
+@code {
+    private LearnPlaneDbContext? _db;
+    private List<Course> _courseList = [];
+    private Course? _selected;
+    private int _gradeFilter;
+    private string _subjectFilter = string.Empty;
+    private string? _message;
+    private bool _success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _db = await DbFactory.CreateDbContextAsync();
+        await ReloadListAsync();
+    }
+    private async Task ReloadListAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.Courses.AsNoTracking().AsQueryable();
+        if (_gradeFilter > 0) query = query.Where(x => x.Grade == _gradeFilter);
+        if (!string.IsNullOrWhiteSpace(_subjectFilter)) query = query.Where(x => x.Subject == _subjectFilter);
+        _courseList = await query.OrderBy(x => x.Grade).ThenBy(x => x.Subject).ThenBy(x => x.SortOrder).ToListAsync();
+    }
+    private async Task LoadCourseAsync(int id)
+    {
+        if (_db is null) return;
+        _db.ChangeTracker.Clear();
+        _selected = await _db.Courses.Include(x => x.Questions).ThenInclude(x => x.Options).SingleAsync(x => x.Id == id);
+        _message = null;
+    }
+    private void NewCourse()
+    {
+        if (_db is null) return;
+        _db.ChangeTracker.Clear();
+        _selected = new Course
+        {
+            Grade = _gradeFilter is >= 1 and <= 10 ? _gradeFilter : 1,
+            Subject = string.IsNullOrWhiteSpace(_subjectFilter) ? "Norsk" : _subjectFilter,
+            Title = "Nytt kurs", Summary = "Kort beskrivelse", Content = "<h2>Dette skal du lære</h2><p>Skriv læringsteksten her.</p>", IsPublished = false,
+            Difficulty = CourseDifficulty.Lett,
+            Questions = Enumerable.Range(1, 4).Select(index => new QuizQuestion
+            {
+                SortOrder = index, Text = $"Spørsmål {index}", Explanation = "Forklar hvorfor svaret er riktig.",
+                Options = Enumerable.Range(1, 4).Select(option => new AnswerOption { SortOrder = option, Text = $"Svaralternativ {option}", IsCorrect = option == 1 }).ToList()
+            }).ToList()
+        };
+        _db.Courses.Add(_selected);
+    }
+    private async Task SaveAsync()
+    {
+        if (_db is null || _selected is null) return;
+        foreach (var question in _selected.Questions)
+        {
+            if (question.Options.Count(x => x.IsCorrect) != 1)
+            {
+                _success = false; _message = $"Spørsmål {question.SortOrder} må ha nøyaktig ett riktig svar."; return;
+            }
+        }
+        await _db.SaveChangesAsync();
+        _success = true; _message = "Kurset og quizinnholdet er lagret.";
+        await ReloadListAsync();
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (_db is not null) await _db.DisposeAsync();
+    }
+}

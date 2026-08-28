@@ -1,0 +1,24 @@
+<nav aria-label="Hovedmeny" class="nav-menu">
+    <a href="/">🏠 Oversikt</a>
+    <a href="/resultatliste">🏆 Resultatliste</a>
+    <div class="nav-heading">Klasse og fag</div>
+    @for (var grade = 1; grade <= 10; grade++)
+    {
+        var currentGrade = grade;
+        <details>
+            <summary>@currentGrade. klasse</summary>
+            <div class="subject-links">
+                @foreach (var subject in CurriculumCatalog.SubjectsForGrade(currentGrade))
+                {
+                    <a href="@($"/kurs?trinn={currentGrade}&fag={Uri.EscapeDataString(subject)}")">@subject</a>
+                }
+            </div>
+        </details>
+    }
+    <AuthorizeView Roles="Admin">
+        <div class="nav-heading">Administrasjon</div>
+        <a href="/admin/statistikk">📊 Statistikk</a>
+        <a href="/admin/brukere">👥 Brukere</a>
+        <a href="/admin/kurs">✏️ Kursinnhold</a>
+    </AuthorizeView>
+</nav>
