@@ -1,11 +1,11 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.400 AS build
 WORKDIR /src
 COPY src/LearnPlane.Web/LearnPlane.Web.csproj src/LearnPlane.Web/
 RUN dotnet restore src/LearnPlane.Web/LearnPlane.Web.csproj
 COPY src/LearnPlane.Web/ src/LearnPlane.Web/
 RUN dotnet publish src/LearnPlane.Web/LearnPlane.Web.csproj -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.11 AS final
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
